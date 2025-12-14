@@ -11,7 +11,7 @@ COPY src /build/src/
 WORKDIR /build/
 RUN mvn package
 
-FROM openjdk:17-oracle
+FROM eclipse-temurin:17-jdk
 WORKDIR /app
 EXPOSE 7801
 
