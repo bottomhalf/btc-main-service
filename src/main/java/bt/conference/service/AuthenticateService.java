@@ -13,11 +13,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.sql.Types;
-import java.time.Instant;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 @Service
 public class AuthenticateService implements IAuthenticateService {
@@ -44,6 +41,7 @@ public class AuthenticateService implements IAuthenticateService {
                 .lastName(userDetail.getLastName())
                 .email(userDetail.getEmail())
                 .userId(userDetail.getUserId())
+                .code(userDetail.getCode())
                 .build();
     }
 

@@ -54,10 +54,10 @@ public class MeetingService implements IMeetingService {
     }
 
     public List<MeetingDetail> getAllMeetingByOrganizerService() throws Exception {
-
+        int userId = Integer.parseInt(userSession.getUserId().replace(userSession.getCode(), ""));
         return dbProcedureManager.getRecords("sp_get_all_meeting_userid",
                 Arrays.asList(
-                        new DbParameters("_userid", userSession.getUserId(), Types.BIGINT)
+                        new DbParameters("_userid", userId, Types.BIGINT)
                 ),
                 MeetingDetail.class
         );

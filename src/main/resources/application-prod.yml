@@ -7,6 +7,15 @@ spring:
   application:
     name: btc-server
 
+  data:
+    mongodb:
+      host: 145.223.22.73
+      port: 30001
+      database: confeet
+      username: adminuser
+      password: password
+      authentication-database: admin
+
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://145.223.22.73:30002/

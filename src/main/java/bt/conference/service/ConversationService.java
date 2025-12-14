@@ -130,51 +130,84 @@ public class ConversationService {
     /**
      * Search conversations by term (username, email, conversation_name)
      */
-    public Conversation createChannelService(Conversation conversation) {
+    public Conversation createSingleChannelService(String senderId, Conversation conversation) {
+        // Validate: Check only two participants for direct chat
+        if (conversation.getParticipantIds().size() != 2) {
+            throw new IllegalArgumentException("Cannot create conversation, required sender and receiver detail");
+        }
+
+        return createConversationService(senderId, "direct", conversation);
+    }
+
+    /**
+     * Search conversations by term (username, email, conversation_name)
+     */
+    public Conversation createGroupChannelService(String senderId, Conversation conversation) {
+        return createConversationService(senderId, "group", conversation);
+    }
+
+    private Conversation createConversationService(String senderId, String type, Conversation conversation) {
+        String receiverId;
+        Optional<String> filterSender = conversation.getParticipantIds()
+                .stream()
+                .filter(x -> x.equals(senderId))
+                .findFirst();
+
+        if (filterSender.isEmpty()) {
+            throw new IllegalArgumentException("Sender id not found in participantIds");
+        }
+
+        Optional<String> filterReceiver = conversation.getParticipantIds()
+                .stream()
+                .filter(x -> !x.equals(senderId))
+                .findFirst();
+
+        if (filterReceiver.isEmpty()) {
+            throw new IllegalArgumentException("Receiver id not found in participantIds");
+        }
+
+        receiverId = filterReceiver.get();
+
+        // Get user details
+        UserCache sender = userCacheRepository.findByUserId(senderId)
+                .orElseThrow(() -> new RuntimeException("Current user not found: " + senderId));
+
+        UserCache receiver = userCacheRepository.findByUserId(receiverId)
+                .orElseThrow(() -> new RuntimeException("Other user not found: " + receiverId));
+
         // Validate
-        if (conversation.getParticipantIds().size() == 2
-                && conversation.getParticipantIds().get(0).equals(conversation.getParticipantIds().get(1))) {
+        if (sender.getUserId().equals(receiver.getUserId())) {
             throw new IllegalArgumentException("Cannot create conversation with yourself");
         }
 
-        String senderId = conversation.getParticipantIds().get(0);
-        String receiverId = conversation.getParticipantIds().get(1);
-
-        log.info("Creating direct conversation between {} and {}", senderId, receiverId);
+        log.info("Creating direct conversation between {} and {}", sender.getUserId(), receiver.getUserId());
 
 
         // Check if direct conversation already exists
         Optional<Conversation> existing = conversationRepository
-                .findDirectConversation(senderId, receiverId);
+                .findDirectConversation(senderId, receiver.getUserId());
 
         if (existing.isPresent()) {
             log.info("Direct conversation already exists: {}", existing.get().getId());
             return existing.get();
         }
 
-        // Get user details
-        UserCache currentUser = userCacheRepository.findByUserId(senderId)
-                .orElseThrow(() -> new RuntimeException("Current user not found: " + senderId));
-
-        UserCache otherUser = userCacheRepository.findByUserId(receiverId)
-                .orElseThrow(() -> new RuntimeException("Other user not found: " + receiverId));
-
         // Create participants
-        List<Conversation.Participant> participants = new ArrayList<>();
-        participants.add(createParticipant(currentUser, "member"));
-        participants.add(createParticipant(otherUser, "member"));
+        List<Participant> participants = new ArrayList<>();
+        participants.add(createParticipant(sender, "member"));
+        participants.add(createParticipant(receiver, "member"));
 
         // Create participant IDs list
-        List<String> participantIds = List.of(senderId, receiverId);
+        List<String> participantIds = List.of(senderId, receiver.getUserId());
 
         // Build conversation
         Instant now = Instant.now();
 
         Conversation conversationInstance = Conversation.builder()
-                .conversationType("direct")
+                .conversationType(type)
                 .participantIds(participantIds)
                 .participants(participants)
-                .conversationName(null)  // Direct chats don't have name
+                .conversationName(receiver.getUsername())  // Direct chats don't have name
                 .conversationAvatar(null)
                 .createdBy(senderId)
                 .createdAt(now)

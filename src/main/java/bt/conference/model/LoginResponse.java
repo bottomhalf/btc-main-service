@@ -11,12 +11,9 @@ import lombok.NoArgsConstructor;
 @Builder
 public class LoginResponse {
     String email;
-
-    long userId;
-
+    String userId;
     String firstName;
-
     String lastName;
-
     String token;
+    String code;
 }

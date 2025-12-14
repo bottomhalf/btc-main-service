@@ -3,6 +3,7 @@ package bt.conference.entity;
 import com.fierhub.database.annotations.Column;
 import com.fierhub.database.annotations.Id;
 import com.fierhub.database.annotations.Table;
+import com.fierhub.database.annotations.Transient;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -14,7 +15,7 @@ import lombok.NoArgsConstructor;
 public class LoginDetail {
     @Id
     @Column(name = "loginId")
-    long loginId;
+    String loginId;
 
     @Column(name = "email")
     String email;
@@ -23,11 +24,14 @@ public class LoginDetail {
     String password;
 
     @Column(name = "userId")
-    long userId;
+    String userId;
 
     @Column(name= "firstName")
     String firstName;
 
     @Column(name= "lastName")
     String lastName;
+
+    @Column(name= "code")
+    String code;
 }

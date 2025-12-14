@@ -50,9 +50,19 @@ public class ConversationController {
      * Search conversations by username, email, or conversation name
      * GET /api/conversations/search?term=john&pageNumber=1&pageSize=10
      */
-    @PostMapping("create-channel")
-    public ResponseEntity<Conversation> createChannel(@RequestBody Conversation conversation) {
-        Conversation response = conversationService.createChannelService(conversation);
+    @PostMapping("create/{id}")
+    public ResponseEntity<Conversation> createChannel(@PathVariable("id") String id, @RequestBody Conversation conversation) {
+        Conversation response = conversationService.createSingleChannelService(id, conversation);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Search conversations by username, email, or conversation name
+     * GET /api/conversations/search?term=john&pageNumber=1&pageSize=10
+     */
+    @PostMapping("create-group/{id}")
+    public ResponseEntity<Conversation> createGroupChannel(@PathVariable("id") String id, @RequestBody Conversation conversation) {
+        Conversation response = conversationService.createGroupChannelService(id, conversation);
         return ResponseEntity.ok(response);
     }
 }
