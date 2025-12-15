@@ -19,7 +19,7 @@ spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://145.223.22.73:30002/
-    userId: root
+    username: root
     password: live@Bottomhalf_001
     database: btc_meets
 
