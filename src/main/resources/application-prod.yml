@@ -19,7 +19,7 @@ spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://145.223.22.73:30002/
-    username: root
+    userId: root
     password: live@Bottomhalf_001
     database: btc_meets
 
@@ -41,4 +41,3 @@ fierhub:
       - /api/auth
       - /api/conference/token
       - /api/meeting/validateMeeting
-
