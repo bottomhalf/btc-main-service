@@ -63,8 +63,11 @@ public class Conversation {
         @Field("user_id")
         private String userId;
 
-        @Field("username")
-        private String username;
+        @Field("first_name")
+        private String firstName;
+
+        @Field("last_name")
+        private String lastName;
 
         @Field("email")
         private String email;

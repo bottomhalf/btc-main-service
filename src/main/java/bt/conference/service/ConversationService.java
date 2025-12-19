@@ -239,7 +239,8 @@ public class ConversationService {
     private Participant createParticipant(UserCache user, String role) {
         return Participant.builder()
                 .userId(user.getUserId())
-                .username(user.getUsername())
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
                 .email(user.getEmail())
                 .avatar(user.getAvatar())
                 .joinedAt(Instant.now())
