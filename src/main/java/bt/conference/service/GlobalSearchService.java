@@ -14,8 +14,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 @Service
 public class GlobalSearchService {
@@ -55,7 +53,7 @@ public class GlobalSearchService {
         }
 
         try {
-            Map<String, List<SearchResultItem>> results = searchRepository.typeaheadSearch(
+            SearchResultItem results = searchRepository.typeaheadSearch(
                     searchTerm.trim(), userSession.getUserId(), fullSearch, TYPEAHEAD_LIMIT);
 
             return buildResponse(results, searchTerm, 0, TYPEAHEAD_LIMIT, startTime, true, false);
@@ -85,7 +83,7 @@ public class GlobalSearchService {
         int skip = page * limit;
 
         try {
-            Map<String, List<SearchResultItem>> results = searchRepository.globalSearch(
+            SearchResultItem results = searchRepository.globalSearch(
                     searchTerm.trim(), currentUserId, skip, limit);
 
             return buildResponse(results, searchTerm, page, limit, startTime, false, false);
@@ -113,12 +111,8 @@ public class GlobalSearchService {
         limit = Math.min(Math.max(1, limit), MAX_LIMIT);
 
         try {
-            Map<String, List<SearchResultItem>> results = searchRepository.globalSearch(
+            SearchResultItem results = searchRepository.globalSearch(
                     searchTerm.trim(), currentUserId, page * limit, limit);
-
-            // Filter to only users
-            List<SearchResultItem> users = results.getOrDefault("users", Collections.emptyList());
-            results = Map.of("users", users, "conversations", Collections.emptyList());
 
             return buildResponse(results, searchTerm, page, limit, startTime, false, false);
 
@@ -142,12 +136,8 @@ public class GlobalSearchService {
         limit = Math.min(Math.max(1, limit), MAX_LIMIT);
 
         try {
-            Map<String, List<SearchResultItem>> results = searchRepository.globalSearch(
+            SearchResultItem results = searchRepository.globalSearch(
                     searchTerm.trim(), currentUserId, page * limit, limit);
-
-            // Filter to only conversations
-            List<SearchResultItem> conversations = results.getOrDefault("conversations", Collections.emptyList());
-            results = Map.of("users", Collections.emptyList(), "conversations", conversations);
 
             return buildResponse(results, searchTerm, page, limit, startTime, false, false);
 
@@ -164,48 +154,32 @@ public class GlobalSearchService {
     }
 
     private GlobalSearchResponse buildResponse(
-            Map<String, List<SearchResultItem>> results,
+            SearchResultItem results,
             String searchTerm, int page, int limit,
             long startTime, boolean isTypeahead, boolean fromCache) {
 
-        List<SearchResultItem> users = results.getOrDefault("users", Collections.emptyList());
-        List<SearchResultItem> conversations = results.getOrDefault("conversations", Collections.emptyList());
-
         // Build grouped results
         GroupedResults grouped = GroupedResults.builder()
-                .users(users)
-                .conversations(conversations)
+                .users(results.getUserCache())
+                .conversations(results.getConversation())
                 .messages(Collections.emptyList()) // Future: add message search
                 .files(Collections.emptyList())    // Future: add file search
-                .userCount(users.size())
-                .conversationCount(conversations.size())
+                .userCount(results.getUserCache().size())
+                .conversationCount(results.getConversation().size())
                 .messageCount(0)
                 .fileCount(0)
                 .build();
 
-        // Build combined results sorted by relevance score
-        List<SearchResultItem> combined = Stream.concat(users.stream(), conversations.stream())
-                .sorted(Comparator.comparingDouble(SearchResultItem::getScore).reversed())
-                .limit(limit)
-                .collect(Collectors.toList());
-
-        // Count by type
-        Map<String, Integer> countByType = new HashMap<>();
-        countByType.put("users", users.size());
-        countByType.put("conversations", conversations.size());
-
         return GlobalSearchResponse.builder()
                 .results(grouped)
-                .combined(combined)
                 .metadata(SearchMetadata.builder()
                         .searchTerm(searchTerm)
-                        .totalCount(users.size() + conversations.size())
+                        .totalCount(results.getUserCache().size() + results.getConversation().size())
                         .page(page)
                         .limit(limit)
                         .executionTimeMs(System.currentTimeMillis() - startTime)
                         .fromCache(fromCache)
                         .isTypeahead(isTypeahead)
-                        .countByType(countByType)
                         .build())
                 .build();
     }
@@ -218,7 +192,6 @@ public class GlobalSearchService {
                         .messages(Collections.emptyList())
                         .files(Collections.emptyList())
                         .build())
-                .combined(Collections.emptyList())
                 .metadata(SearchMetadata.builder()
                         .searchTerm(searchTerm != null ? searchTerm : "")
                         .totalCount(0)
@@ -226,7 +199,6 @@ public class GlobalSearchService {
                         .limit(limit)
                         .executionTimeMs(System.currentTimeMillis() - startTime)
                         .isTypeahead(isTypeahead)
-                        .countByType(Collections.emptyMap())
                         .build())
                 .build();
     }
@@ -239,11 +211,9 @@ public class GlobalSearchService {
                         .messages(Collections.emptyList())
                         .files(Collections.emptyList())
                         .build())
-                .combined(Collections.emptyList())
                 .error(GlobalSearchResponse.ErrorInfo.builder()
                         .code(e.getErrorType().name())
-                        .message(e.getErrorType().getMessage())
-                        .retriable(e.isRetriable())
+                        .message(e.getErrorType().getDescription())
                         .build())
                 .metadata(SearchMetadata.builder()
                         .searchTerm(searchTerm)
@@ -257,7 +227,6 @@ public class GlobalSearchService {
                 .error(GlobalSearchResponse.ErrorInfo.builder()
                         .code("INTERNAL_ERROR")
                         .message("An unexpected error occurred")
-                        .retriable(true)
                         .build())
                 .metadata(SearchMetadata.builder()
                         .searchTerm(searchTerm)

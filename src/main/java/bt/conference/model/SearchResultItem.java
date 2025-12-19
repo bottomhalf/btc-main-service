@@ -1,5 +1,7 @@
 package bt.conference.model;
 
+import bt.conference.entity.Conversation;
+import bt.conference.entity.UserCache;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -7,6 +9,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -26,39 +29,14 @@ public class SearchResultItem {
     private ResultType type;
 
     /**
-     * Unique identifier of the entity
+     * UserCache entity
      */
-    private String id;
+    private List<UserCache> userCache;
 
     /**
-     * Primary display text (name, title, etc.)
+     * Conversation entity
      */
-    private String title;
-
-    /**
-     * Secondary display text (email, preview, etc.)
-     */
-    private String subtitle;
-
-    /**
-     * Avatar/icon URL
-     */
-    private String avatar;
-
-    /**
-     * Online status (for users)
-     */
-    private String status;
-
-    /**
-     * Relevance score (higher = more relevant)
-     */
-    private double score;
-
-    /**
-     * Highlighted matches (field -> highlighted text)
-     */
-    private Map<String, String> highlights;
+    private List<Conversation> conversation;
 
     /**
      * Last activity/update timestamp (for sorting by recency)
@@ -66,9 +44,24 @@ public class SearchResultItem {
     private Instant lastActivity;
 
     /**
-     * Additional metadata specific to the result type
+     * Search metadata
      */
-    private Map<String, Object> metadata;
+    private SearchMetadata metadata;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class SearchMetadata {
+        private String searchTerm;
+        private long totalCount;
+        private int page;
+        private int limit;
+        private long executionTimeMs;
+        private boolean fromCache;
+        private boolean isTypeahead;
+        private Map<String, Integer> countByType;
+    }
 
     public enum ResultType {
         USER,

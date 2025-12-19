@@ -1,5 +1,7 @@
 package bt.conference.repository;
 
+import bt.conference.entity.Conversation;
+import bt.conference.entity.UserCache;
 import bt.conference.model.SearchResultItem;
 import bt.conference.service.GlobalSearchException;
 import bt.conference.service.GlobalSearchException.ErrorType;
@@ -274,7 +276,7 @@ public class GlobalSearchRepository {
         return String.format("%s:%s:%s:%d", searchTerm.toLowerCase(), userId, isTypeahead, limit);
     }
 
-    private Map<String, List<SearchResultItem>> getFromCache(String cacheKey) {
+    private SearchResultItem getFromCache(String cacheKey) {
         if (!cacheEnabled) return null;
 
         CacheEntry entry = searchCache.get(cacheKey);
@@ -286,7 +288,7 @@ public class GlobalSearchRepository {
         return null;
     }
 
-    private void putInCache(String cacheKey, Map<String, List<SearchResultItem>> results) {
+    private void putInCache(String cacheKey, SearchResultItem results) {
         if (!cacheEnabled) return;
 
         searchCache.put(cacheKey, new CacheEntry(results));
@@ -308,17 +310,17 @@ public class GlobalSearchRepository {
      * Typeahead search - fast, limited results, prefix matching
      * Used as user types in search box
      */
-    public Map<String, List<SearchResultItem>> typeaheadSearch(String searchTerm, String userId, String fullSearch, int limit) {
+    public SearchResultItem typeaheadSearch(String searchTerm, String userId, String fullSearch, int limit) {
         validateAndPrepare(searchTerm, userId);
 
         String cacheKey = buildCacheKey(searchTerm, userId, true, limit);
-        Map<String, List<SearchResultItem>> cached = getFromCache(cacheKey);
+        SearchResultItem cached = getFromCache(cacheKey);
         if (cached != null) {
             return cached;
         }
 
         try {
-            Map<String, List<SearchResultItem>> results =
+            SearchResultItem results =
                     executeParallelSearch(searchTerm, userId, 0, limit, fullSearch, true);
             putInCache(cacheKey, results);
             return results;
@@ -331,19 +333,19 @@ public class GlobalSearchRepository {
      * Full global search with pagination
      * Used when user presses Enter or clicks "See all results"
      */
-    public Map<String, List<SearchResultItem>> globalSearch(
+    public SearchResultItem globalSearch(
             String searchTerm, String fullSearch, int skip, int limit) {
 
         validateAndPrepare(searchTerm, userSession.getUserId());
 
         String cacheKey = buildCacheKey(searchTerm + ":" + skip, userSession.getUserId(), false, limit);
-        Map<String, List<SearchResultItem>> cached = getFromCache(cacheKey);
+        SearchResultItem cached = getFromCache(cacheKey);
         if (cached != null) {
             return cached;
         }
 
         try {
-            Map<String, List<SearchResultItem>> results = executeParallelSearch(
+            SearchResultItem results = executeParallelSearch(
                     searchTerm, userSession.getUserId(), skip, limit, fullSearch, false);
             putInCache(cacheKey, results);
             return results;
@@ -369,20 +371,20 @@ public class GlobalSearchRepository {
     }
 
     // ==================== Parallel Search Execution ====================
-    private Map<String, List<SearchResultItem>> executeParallelSearch(
-            String searchTerm, String userId, int skip, int limit, String fullSearch, boolean isTypeahead) {
+    private SearchResultItem executeParallelSearch(
+            String searchTerm, String userId, int skip, int limit, String fullSearch, boolean isTypeAhead) {
 
-        int timeoutMs = isTypeahead ? typeaheadTimeoutMs : searchTimeoutSeconds * 1000;
+        int timeoutMs = isTypeAhead ? typeaheadTimeoutMs : searchTimeoutSeconds * 1000;
 
         // Launch parallel searches
-        CompletableFuture<List<SearchResultItem>> usersFuture = CompletableFuture
+        CompletableFuture<List<UserCache>> usersFuture = CompletableFuture
                 .supplyAsync(() -> searchUsers(searchTerm, fullSearch.equals("y"), skip, limit), searchExecutor)
                 .exceptionally(ex -> {
                     logger.warn("User search failed: {}", ex.getMessage());
                     return Collections.emptyList();
                 });
 
-        CompletableFuture<List<SearchResultItem>> conversationsFuture = CompletableFuture
+        CompletableFuture<List<Conversation>> conversationsFuture = CompletableFuture
                 .supplyAsync(() -> searchConversations(searchTerm, userId, skip, limit), searchExecutor)
                 .exceptionally(ex -> {
                     logger.warn("Conversation search failed: {}", ex.getMessage());
@@ -395,18 +397,18 @@ public class GlobalSearchRepository {
 
             consecutiveFailures.set(0); // Reset circuit breaker
 
-            Map<String, List<SearchResultItem>> results = new HashMap<>();
-            results.put("users", usersFuture.join());
-            results.put("conversations", conversationsFuture.join());
-            return results;
-
+            return SearchResultItem.builder()
+                    .conversation(conversationsFuture.join())
+                    .userCache(usersFuture.join())
+                    .build();
         } catch (TimeoutException e) {
             logger.warn("Search timeout after {}ms for term: {}", timeoutMs, searchTerm);
             // Return partial results if available
-            Map<String, List<SearchResultItem>> partial = new HashMap<>();
-            partial.put("users", getCompletedResult(usersFuture));
-            partial.put("conversations", getCompletedResult(conversationsFuture));
-            return partial;
+
+            return SearchResultItem.builder()
+                    .conversation(Collections.emptyList())
+                    .userCache(Collections.emptyList())
+                    .build();
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -436,7 +438,7 @@ public class GlobalSearchRepository {
 
     // ==================== User Search ====================
 
-    private List<SearchResultItem> searchUsers(String searchTerm, boolean required, int skip, int limit) {
+    private List<UserCache> searchUsers(String searchTerm, boolean required, int skip, int limit) {
         if (!required) {
             return new ArrayList<>();
         }
@@ -468,12 +470,11 @@ public class GlobalSearchRepository {
             query.skip(skip).limit(limit);
             query.with(Sort.by(Sort.Direction.DESC, "updated_at"));
 
-            List<Document> docs = mongoTemplate.find(query, Document.class, "user_cache");
+            return mongoTemplate.find(query, UserCache.class, "user_cache");
 
-            return docs.stream()
-                    .map(doc -> mapToUserResult(doc, searchTerm))
-                    .collect(Collectors.toList());
-
+            //return docs.stream()
+            //        .map(doc -> mapToUserResult(doc, searchTerm))
+            //        .collect(Collectors.toList());
         } catch (MongoTimeoutException e) {
             throw new GlobalSearchException(ErrorType.TIMEOUT, searchTerm, e);
         } catch (MongoException e) {
@@ -481,7 +482,7 @@ public class GlobalSearchRepository {
         }
     }
 
-    private SearchResultItem mapToUserResult(Document doc, String searchTerm) {
+    private UserCache mapToUserResult(Document doc, String searchTerm) {
         String firstName = doc.getString("first_name");
         String lastName = doc.getString("last_name");
         String fullName = (firstName != null ? firstName : "") +
@@ -497,24 +498,24 @@ public class GlobalSearchRepository {
                         "email", doc.getString("email") != null ? doc.getString("email") : "",
                         "username", doc.getString("username") != null ? doc.getString("username") : ""));
 
-        return SearchResultItem.builder()
-                .type(SearchResultItem.ResultType.USER)
-                .id(doc.getString("user_id"))
-                .title(fullName.trim())
-                .subtitle(doc.getString("email"))
-                .avatar(doc.getString("avatar"))
-                .status(doc.getString("status"))
-                .score(score)
-                .highlights(highlights)
-                .lastActivity(doc.getDate("updated_at") != null
-                        ? doc.getDate("updated_at").toInstant() : null)
-                .metadata(Map.of("username", doc.getString("username") != null ? doc.getString("username") : ""))
+        return UserCache.builder()
+                //.type(SearchResultItem.ResultType.USER)
+                //.id(doc.getString("user_id"))
+                //.title(fullName.trim())
+                //.subtitle(doc.getString("email"))
+                //.avatar(doc.getString("avatar"))
+                //.status(doc.getString("status"))
+                //.score(score)
+                //.highlights(highlights)
+                //.lastActivity(doc.getDate("updated_at") != null
+                //       ? doc.getDate("updated_at").toInstant() : null)
+                //.metadata(Map.of("username", doc.getString("username") != null ? doc.getString("username") : ""))
                 .build();
     }
 
     // ==================== Conversation Search ====================
 
-    private List<SearchResultItem> searchConversations(String searchTerm, String userId, int skip, int limit) {
+    private List<Conversation> searchConversations(String searchTerm, String userId, int skip, int limit) {
         try {
             Query query;
 
@@ -543,12 +544,7 @@ public class GlobalSearchRepository {
             query.skip(skip).limit(limit);
             query.with(Sort.by(Sort.Direction.DESC, "updated_at"));
 
-            List<Document> docs = mongoTemplate.find(query, Document.class, "conversations");
-
-            return docs.stream()
-                    .map(doc -> mapToConversationResult(doc, searchTerm, userId))
-                    .collect(Collectors.toList());
-
+            return mongoTemplate.find(query, Conversation.class, "conversations");
         } catch (MongoTimeoutException e) {
             throw new GlobalSearchException(ErrorType.TIMEOUT, searchTerm, e);
         } catch (MongoException e) {
@@ -556,42 +552,42 @@ public class GlobalSearchRepository {
         }
     }
 
-    private SearchResultItem mapToConversationResult(Document doc, String searchTerm, String currentUserId) {
-        String conversationName = doc.getString("conversation_name");
-        String conversationType = doc.getString("conversation_type");
-
-        // For direct chats, show other participant's name
-        String displayName = conversationName;
-        String subtitle = conversationType;
-
-        @SuppressWarnings("unchecked")
-        List<Document> participants = (List<Document>) doc.get("participants");
-        if ("direct".equals(conversationType) && participants != null && currentUserId != null) {
-            for (Document p : participants) {
-                if (!currentUserId.equals(p.getString("user_id"))) {
-                    displayName = p.getString("username");
-                    subtitle = p.getString("email");
-                    break;
-                }
-            }
-        }
-
-        double score = calculateRelevanceScore(searchTerm, conversationName, displayName, null, null);
-
-        return SearchResultItem.builder()
-                .type(SearchResultItem.ResultType.CONVERSATION)
-                .id(doc.getObjectId("_id").toString())
-                .title(displayName)
-                .subtitle(subtitle)
-                .score(score)
-                .lastActivity(doc.getDate("updated_at") != null
-                        ? doc.getDate("updated_at").toInstant() : null)
-                .metadata(Map.of(
-                        "type", conversationType != null ? conversationType : "unknown",
-                        "participantCount", participants != null ? participants.size() : 0
-                ))
-                .build();
-    }
+//    private SearchResultItem mapToConversationResult(Document doc, String searchTerm, String currentUserId) {
+//        String conversationName = doc.getString("conversation_name");
+//        String conversationType = doc.getString("conversation_type");
+//
+//        // For direct chats, show other participant's name
+//        String displayName = conversationName;
+//        String subtitle = conversationType;
+//
+//        @SuppressWarnings("unchecked")
+//        List<Document> participants = (List<Document>) doc.get("participants");
+//        if ("direct".equals(conversationType) && participants != null && currentUserId != null) {
+//            for (Document p : participants) {
+//                if (!currentUserId.equals(p.getString("user_id"))) {
+//                    displayName = p.getString("username");
+//                    subtitle = p.getString("email");
+//                    break;
+//                }
+//            }
+//        }
+//
+//        double score = calculateRelevanceScore(searchTerm, conversationName, displayName, null, null);
+//
+//        return SearchResultItem.builder()
+//                .type(SearchResultItem.ResultType.CONVERSATION)
+//                .id(doc.getObjectId("_id").toString())
+//                .title(displayName)
+//                .subtitle(subtitle)
+//                .score(score)
+//                .lastActivity(doc.getDate("updated_at") != null
+//                        ? doc.getDate("updated_at").toInstant() : null)
+//                .metadata(Map.of(
+//                        "type", conversationType != null ? conversationType : "unknown",
+//                        "participantCount", participants != null ? participants.size() : 0
+//                ))
+//                .build();
+//    }
 
     // ==================== Relevance & Highlighting ====================
 
@@ -639,10 +635,10 @@ public class GlobalSearchRepository {
     // ==================== Helper Classes ====================
 
     private static class CacheEntry {
-        final Map<String, List<SearchResultItem>> results;
+        final SearchResultItem results;
         final long createdAt;
 
-        CacheEntry(Map<String, List<SearchResultItem>> results) {
+        CacheEntry(SearchResultItem results) {
             this.results = results;
             this.createdAt = System.currentTimeMillis();
         }

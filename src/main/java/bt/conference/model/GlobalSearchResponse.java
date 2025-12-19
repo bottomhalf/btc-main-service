@@ -1,5 +1,8 @@
 package bt.conference.model;
 
+import bt.conference.entity.Conversation;
+import bt.conference.entity.Message;
+import bt.conference.entity.UserCache;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -7,7 +10,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * Response structure for global search, optimized for Teams-like UI.
@@ -25,11 +27,6 @@ public class GlobalSearchResponse {
     private GroupedResults results;
 
     /**
-     * Combined results sorted by relevance (for unified search view)
-     */
-    private List<SearchResultItem> combined;
-
-    /**
      * Search metadata
      */
     private SearchMetadata metadata;
@@ -44,9 +41,9 @@ public class GlobalSearchResponse {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class GroupedResults {
-        private List<SearchResultItem> users;
-        private List<SearchResultItem> conversations;
-        private List<SearchResultItem> messages;
+        private List<UserCache> users;
+        private List<Conversation> conversations;
+        private List<Message> messages;
         private List<SearchResultItem> files;
 
         private int userCount;
@@ -67,7 +64,6 @@ public class GlobalSearchResponse {
         private long executionTimeMs;
         private boolean fromCache;
         private boolean isTypeahead;
-        private Map<String, Integer> countByType;
     }
 
     @Data
@@ -77,13 +73,9 @@ public class GlobalSearchResponse {
     public static class ErrorInfo {
         private String code;
         private String message;
-        private boolean retriable;
     }
 
     public boolean hasResults() {
-        if (combined != null && !combined.isEmpty()) {
-            return true;
-        }
         if (results != null) {
             return (results.users != null && !results.users.isEmpty())
                     || (results.conversations != null && !results.conversations.isEmpty())
@@ -97,12 +89,11 @@ public class GlobalSearchResponse {
         return error != null;
     }
 
-    public static GlobalSearchResponse error(String code, String message, boolean retriable) {
+    public static GlobalSearchResponse error(String code, String message) {
         return GlobalSearchResponse.builder()
                 .error(ErrorInfo.builder()
                         .code(code)
                         .message(message)
-                        .retriable(retriable)
                         .build())
                 .build();
     }

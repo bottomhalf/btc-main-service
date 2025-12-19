@@ -53,14 +53,14 @@ public class GlobalSearchController {
     /**
      * Typeahead search - use as user types (debounce on frontend!)
      * GET /api/search/typeahead?q=ist
-     *
+     * <p>
      * Returns limited results (5 per category) for quick display
      */
     @GetMapping("/typeahead")
     public ResponseEntity<GlobalSearchResponse> typeahead(
             @RequestParam("q") String query,
             @RequestParam("fs") String fullSearch
-            ) {
+    ) {
         GlobalSearchResponse response = searchService.typeahead(query, fullSearch);
         return buildResponse(response);
     }
@@ -141,6 +141,6 @@ public class GlobalSearchController {
         logger.error("Unhandled exception in search controller: {}", ex.getMessage(), ex);
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(GlobalSearchResponse.error("INTERNAL_ERROR", "An unexpected error occurred", true));
+                .body(GlobalSearchResponse.error("INTERNAL_ERROR", "An unexpected error occurred"));
     }
 }
