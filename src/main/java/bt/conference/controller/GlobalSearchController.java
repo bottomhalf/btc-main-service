@@ -3,11 +3,11 @@ package bt.conference.controller;
 import bt.conference.model.GlobalSearchResponse;
 import bt.conference.service.GlobalSearchService;
 
+import in.bottomhalf.common.models.ApiErrorResponse;
+import in.bottomhalf.common.models.ApiResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
@@ -31,14 +31,18 @@ public class GlobalSearchController {
      * GET /api/search/health
      */
     @GetMapping("health/")
-    public ResponseEntity<Map<String, Object>> health() {
+    public ApiResponse health() {
         boolean healthy = searchService.isHealthy();
-        return ResponseEntity
-                .status(healthy ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE)
-                .body(Map.of(
-                        "status", healthy ? "UP" : "DOWN",
-                        "service", "GlobalSearchService"
-                ));
+        if (healthy) {
+            return ApiResponse.Ok(Map.of(
+                    "status", "UP",
+                    "service", "GlobalSearchService"
+            ));
+        }
+        return ApiErrorResponse.BadRequest(Map.of(
+                "status", "DOWN",
+                "service", "GlobalSearchService"
+        ));
     }
 
     /**
@@ -46,8 +50,8 @@ public class GlobalSearchController {
      * GET /api/search/metrics
      */
     @GetMapping("metrics/")
-    public ResponseEntity<Map<String, Object>> metrics() {
-        return ResponseEntity.ok(searchService.getMetrics());
+    public ApiResponse metrics() {
+        return ApiResponse.Ok(searchService.getMetrics());
     }
 
     /**
@@ -57,7 +61,7 @@ public class GlobalSearchController {
      * Returns limited results (5 per category) for quick display
      */
     @GetMapping("/typeahead")
-    public ResponseEntity<GlobalSearchResponse> typeahead(
+    public ApiResponse typeahead(
             @RequestParam("q") String query,
             @RequestParam("fs") String fullSearch
     ) {
@@ -70,7 +74,7 @@ public class GlobalSearchController {
      * GET /api/search/global?q=istiy&page=0&limit=20
      */
     @GetMapping("/global")
-    public ResponseEntity<GlobalSearchResponse> globalSearch(
+    public ApiResponse globalSearch(
             @RequestParam("q") String query,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "limit", defaultValue = "20") int limit,
@@ -88,7 +92,7 @@ public class GlobalSearchController {
      * GET /api/search/users?q=istiy&page=0&limit=20
      */
     @GetMapping("/users")
-    public ResponseEntity<GlobalSearchResponse> searchUsers(
+    public ApiResponse searchUsers(
             @RequestParam("q") String query,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "limit", defaultValue = "20") int limit,
@@ -104,7 +108,7 @@ public class GlobalSearchController {
      * GET /api/search/conversations?q=istiy&page=0&limit=20
      */
     @GetMapping("/conversations")
-    public ResponseEntity<GlobalSearchResponse> searchConversations(
+    public ApiResponse searchConversations(
             @RequestParam("q") String query,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "limit", defaultValue = "20") int limit,
@@ -118,29 +122,19 @@ public class GlobalSearchController {
     /**
      * Build appropriate response based on error state
      */
-    private ResponseEntity<GlobalSearchResponse> buildResponse(GlobalSearchResponse response) {
+    private ApiResponse buildResponse(GlobalSearchResponse response) {
         if (response.hasError()) {
-            HttpStatus status = switch (response.getError().getCode()) {
-                case "INVALID_INPUT" -> HttpStatus.BAD_REQUEST;
-                case "RATE_LIMITED" -> HttpStatus.TOO_MANY_REQUESTS;
-                case "TIMEOUT" -> HttpStatus.GATEWAY_TIMEOUT;
-                case "THREAD_POOL_EXHAUSTED", "THREAD_POOL_SHUTDOWN" -> HttpStatus.SERVICE_UNAVAILABLE;
-                case "UNAUTHORIZED" -> HttpStatus.FORBIDDEN;
-                default -> HttpStatus.INTERNAL_SERVER_ERROR;
-            };
-            return ResponseEntity.status(status).body(response);
+            return ApiErrorResponse.BadRequest(response);
         }
-        return ResponseEntity.ok(response);
+        return ApiResponse.Ok(response);
     }
 
     /**
      * Global exception handler for this controller
      */
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<GlobalSearchResponse> handleException(Exception ex) {
+    public ApiResponse handleException(Exception ex) {
         logger.error("Unhandled exception in search controller: {}", ex.getMessage(), ex);
-        return ResponseEntity
-                .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(GlobalSearchResponse.error("INTERNAL_ERROR", "An unexpected error occurred"));
+        return ApiErrorResponse.BadRequest(GlobalSearchResponse.error("INTERNAL_ERROR", "An unexpected error occurred"));
     }
 }

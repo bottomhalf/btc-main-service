@@ -3,11 +3,9 @@ package bt.conference.controller;
 import bt.conference.dto.*;
 import bt.conference.entity.Conversation;
 import bt.conference.service.ConversationService;
+import in.bottomhalf.common.models.ApiResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping(value = "api/conversations/")
@@ -20,14 +18,29 @@ public class ConversationController {
      * GET /api/conversations?pageNumber=1&pageSize=10
      */
     @GetMapping("get-all")
-    public ResponseEntity<PagedResponse<Conversation>> getAllConversations(
+    public ApiResponse getAllConversations(
             @RequestParam(defaultValue = "1") int pageNumber,
             @RequestParam(defaultValue = "10") int pageSize
     ) {
         PagedResponse<Conversation> response = conversationService
                 .getAllConversations(pageNumber, pageSize);
 
-        return ResponseEntity.ok(response);
+        return ApiResponse.Ok(response);
+    }
+
+    /**
+     * Get ALL conversations with pagination
+     * GET /api/conversations?pageNumber=1&pageSize=10
+     */
+    @GetMapping("rooms")
+    public ApiResponse getRooms(
+            @RequestParam(defaultValue = "1") int pageNumber,
+            @RequestParam(defaultValue = "10") int pageSize
+    ) {
+        PagedResponse<Conversation> response = conversationService
+                .getRoomsService(pageNumber, pageSize);
+
+        return ApiResponse.Ok(response);
     }
 
     /**
@@ -35,7 +48,7 @@ public class ConversationController {
      * GET /api/conversations/search?term=john&pageNumber=1&pageSize=10
      */
     @GetMapping("search")
-    public ResponseEntity<PagedResponse<Conversation>> searchConversations(
+    public ApiResponse searchConversations(
             @RequestParam(required = false) String term,
             @RequestParam(defaultValue = "1") int pageNumber,
             @RequestParam(defaultValue = "10") int pageSize
@@ -43,7 +56,7 @@ public class ConversationController {
         PagedResponse<Conversation> response = conversationService
                 .searchConversations(term, pageNumber, pageSize);
 
-        return ResponseEntity.ok(response);
+        return ApiResponse.Ok(response);
     }
 
     /**
@@ -51,9 +64,9 @@ public class ConversationController {
      * GET /api/conversations/search?term=john&pageNumber=1&pageSize=10
      */
     @PostMapping("create/{id}")
-    public ResponseEntity<Conversation> createChannel(@PathVariable("id") String id, @RequestBody Conversation conversation) {
+    public ApiResponse createChannel(@PathVariable("id") String id, @RequestBody Conversation conversation) {
         Conversation response = conversationService.createSingleChannelService(id, conversation);
-        return ResponseEntity.ok(response);
+        return ApiResponse.Ok(response);
     }
 
     /**
@@ -61,8 +74,8 @@ public class ConversationController {
      * GET /api/conversations/search?term=john&pageNumber=1&pageSize=10
      */
     @PostMapping("create-group/{id}")
-    public ResponseEntity<Conversation> createGroupChannel(@PathVariable("id") String id, @RequestBody Conversation conversation) {
+    public ApiResponse createGroupChannel(@PathVariable("id") String id, @RequestBody Conversation conversation) {
         Conversation response = conversationService.createGroupChannelService(id, conversation);
-        return ResponseEntity.ok(response);
+        return ApiResponse.Ok(response);
     }
 }

@@ -3,7 +3,6 @@ package bt.conference.controller;
 import bt.conference.serviceinterface.IUserService;
 import in.bottomhalf.common.models.ApiResponse;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -13,8 +12,8 @@ public class UserController {
     IUserService _userService;
 
     @GetMapping("getAllUser")
-    public ResponseEntity<ApiResponse> getAllUser() throws Exception {
+    public ApiResponse getAllUser() throws Exception {
         var result = _userService.getAllUserService();
-        return ResponseEntity.ok(ApiResponse.Ok(result));
+        return ApiResponse.Ok(result);
     }
 }

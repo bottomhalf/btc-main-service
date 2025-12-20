@@ -6,6 +6,7 @@ import bt.conference.entity.Conversation.Participant;
 import bt.conference.entity.UserCache;
 import bt.conference.repository.ConversationRepository;
 import bt.conference.repository.UserCacheRepository;
+import com.fierhub.model.UserSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -27,6 +28,7 @@ public class ConversationService {
     private final ConversationRepository conversationRepository;
     private final UserCacheRepository userCacheRepository;
     private final MongoTemplate mongoTemplate;
+    private final UserSession userSession;
 
     /**
      * Get ALL conversations with pagination (No filter)
@@ -44,6 +46,40 @@ public class ConversationService {
         return PagedResponse.of(
                 page.getContent(),
                 page.getTotalPages(),
+                pageNumber,
+                pageSize
+        );
+    }
+
+    /**
+     * Get ALL conversations that contains current user id with pagination (No filter)
+     */
+    public PagedResponse<Conversation> getRoomsService(
+            int pageNumber,
+            int pageSize) {
+        int skip = (pageNumber - 1) * pageSize;
+
+        // Build criteria dynamically
+        Criteria criteria = Criteria.where("participant_ids").is(this.userSession.getUserId())
+                .and("is_active").is(true);
+
+        // Create query
+        Query query = new Query(criteria)
+                .with(Sort.by(Sort.Direction.DESC, "last_message_at"))
+                .skip(skip)
+                .limit(pageSize);
+
+        // Get total count for pagination
+        long total = mongoTemplate.count(query, Conversation.class);
+
+        List<Conversation> conversations = mongoTemplate.find(query, Conversation.class);
+
+        // Calculate total pages
+        int totalPages = (int) Math.ceil((double) total / pageSize);
+
+        return PagedResponse.of(
+                conversations,
+                totalPages,
                 pageNumber,
                 pageSize
         );
@@ -95,7 +131,7 @@ public class ConversationService {
 
             Criteria searchCriteria = new Criteria().orOperator(
                     Criteria.where("conversation_name").regex(pattern, "i"),
-                    Criteria.where("participants.username").regex(pattern, "i"),
+                    Criteria.where("participants.user_id").regex(pattern, "i"),
                     Criteria.where("participants.email").regex(pattern, "i")
             );
 
@@ -213,7 +249,7 @@ public class ConversationService {
                 .createdAt(now)
                 .updatedAt(now)
                 .lastMessage(null)
-                .lastMessageAt(null)
+                .lastMessageAt(now)
                 .isActive(true)
                 .settings(Conversation.ConversationSettings.builder()
                         .allowReactions(true)

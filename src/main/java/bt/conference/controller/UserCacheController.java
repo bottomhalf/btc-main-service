@@ -4,8 +4,9 @@ import bt.conference.dto.PagedResponse;
 import bt.conference.entity.UserCache;
 import bt.conference.model.UserCacheSearchRequest;
 import bt.conference.service.UserCacheService;
+import in.bottomhalf.common.models.ApiErrorResponse;
+import in.bottomhalf.common.models.ApiResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -20,12 +21,12 @@ public class UserCacheController {
      * GET /api/users?pageNumber=1&pageSize=10
      */
     @GetMapping("get-users")
-    public ResponseEntity<PagedResponse<UserCache>> getAllUsers(
+    public ApiResponse getAllUsers(
             @RequestParam(defaultValue = "1") int pageNumber,
             @RequestParam(defaultValue = "10") int pageSize
     ) {
         PagedResponse<UserCache> response = userCacheService.getAllUsers(pageNumber, pageSize);
-        return ResponseEntity.ok(response);
+        return ApiResponse.Ok(response);
     }
 
     /**
@@ -33,13 +34,13 @@ public class UserCacheController {
      * GET /api/users/search?term=john&pageNumber=1&pageSize=10
      */
     @GetMapping("search")
-    public ResponseEntity<PagedResponse<UserCache>> searchUsers(
+    public ApiResponse searchUsers(
             @RequestParam(required = false) String term,
             @RequestParam(defaultValue = "1") int pageNumber,
             @RequestParam(defaultValue = "10") int pageSize
     ) {
         PagedResponse<UserCache> response = userCacheService.searchUsers(term, pageNumber, pageSize);
-        return ResponseEntity.ok(response);
+        return ApiResponse.Ok(response);
     }
 
     /**
@@ -47,11 +48,11 @@ public class UserCacheController {
      * POST /api/users/search
      */
     @PostMapping("search")
-    public ResponseEntity<PagedResponse<UserCache>> searchUsersAdvanced(
+    public ApiResponse searchUsersAdvanced(
             @RequestBody UserCacheSearchRequest request
     ) {
         PagedResponse<UserCache> response = userCacheService.searchUsers(request);
-        return ResponseEntity.ok(response);
+        return ApiResponse.Ok(response);
     }
 
     /**
@@ -59,13 +60,13 @@ public class UserCacheController {
      * GET /api/users/search/active?term=john&pageNumber=1&pageSize=10
      */
     @GetMapping("search/active")
-    public ResponseEntity<PagedResponse<UserCache>> searchActiveUsers(
+    public ApiResponse searchActiveUsers(
             @RequestParam(required = false) String term,
             @RequestParam(defaultValue = "1") int pageNumber,
             @RequestParam(defaultValue = "10") int pageSize
     ) {
         PagedResponse<UserCache> response = userCacheService.searchActiveUsers(term, pageNumber, pageSize);
-        return ResponseEntity.ok(response);
+        return ApiResponse.Ok(response);
     }
 
     /**
@@ -73,7 +74,7 @@ public class UserCacheController {
      * GET /api/users/search/exclude/{userId}?term=john&pageNumber=1&pageSize=10
      */
     @GetMapping("search/exclude/{userId}")
-    public ResponseEntity<PagedResponse<UserCache>> searchUsersExcluding(
+    public ApiResponse searchUsersExcluding(
             @PathVariable String userId,
             @RequestParam(required = false) String term,
             @RequestParam(defaultValue = "1") int pageNumber,
@@ -82,7 +83,7 @@ public class UserCacheController {
         PagedResponse<UserCache> response = userCacheService.searchUsersExcluding(
                 userId, term, pageNumber, pageSize
         );
-        return ResponseEntity.ok(response);
+        return ApiResponse.Ok(response);
     }
 
     /**
@@ -90,10 +91,10 @@ public class UserCacheController {
      * GET /api/users/{id}
      */
     @GetMapping("/{id}")
-    public ResponseEntity<UserCache> getUserById(@PathVariable String id) {
+    public ApiResponse getUserById(@PathVariable String id) {
         return userCacheService.getUserById(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .map(ApiResponse::Ok)
+                .orElse(ApiErrorResponse.BadRequest("User not found"));
     }
 
     /**
@@ -101,9 +102,9 @@ public class UserCacheController {
      * GET /api/users/by-user-id/{userId}
      */
     @GetMapping("/by-user-id/{userId}")
-    public ResponseEntity<UserCache> getUserByUserId(@PathVariable String userId) {
+    public ApiResponse getUserByUserId(@PathVariable String userId) {
         return userCacheService.getUserByUserId(userId)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .map(ApiResponse::Ok)
+                .orElse(ApiErrorResponse.BadRequest("User not found"));
     }
 }
