@@ -2,6 +2,7 @@ package bt.conference;
 
 import java.util.Map;
 
+import in.bottomhalf.common.models.ApiAuthResponse;
 import in.bottomhalf.common.models.ApiErrorResponse;
 import in.bottomhalf.common.models.ApiResponse;
 import org.springframework.beans.factory.annotation.Value;
@@ -51,7 +52,7 @@ public class Controller {
 		token.setIdentity(participantName);
 		token.addGrants(new RoomJoin(true), new RoomName(roomName));
 
-		return ApiResponse.Ok(Map.of("token", token.toJwt()));
+		return ApiAuthResponse.Ok(null, token.toJwt());
 	}
 
 	@PostMapping(value = "livekit/webhook", consumes = "application/webhook+json")
