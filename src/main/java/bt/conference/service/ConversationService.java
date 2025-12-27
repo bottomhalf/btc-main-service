@@ -182,6 +182,63 @@ public class ConversationService {
         return createConversationService(senderId, "group", conversation);
     }
 
+    private void validateGroupParticipants(List<Participant> participants) {
+        if (participants == null || participants.size() < 2) {
+            throw new IllegalArgumentException("At least two participants are required to create a group");
+        }
+
+        participants.stream().filter(x -> x.getUserId() == null || x.getUserId().isEmpty()).findFirst()
+                .ifPresent(x -> {
+                    throw new IllegalArgumentException("Participant userId should not be empty or null");
+                });
+    }
+
+    public Conversation createGroupService(String userId, String groupName, List<Participant> participants) {
+        if (groupName == null || groupName.isEmpty()) {
+            throw new IllegalArgumentException("Group name should not be empty or null");
+        }
+
+        if (userId == null || userId.isEmpty()) {
+            throw new IllegalArgumentException("User id should not be empty or null");
+        }
+
+        validateGroupParticipants(participants);
+
+        var owner = participants.stream().filter(x -> x.getUserId().equals(userId)).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("At least one admin is required in group"));
+
+        owner.setRole("admin");
+
+        // Build conversation
+        Instant now = Instant.now();
+
+        Conversation conversationInstance = Conversation.builder()
+                .conversationType("group")
+                .participantIds(participants.stream().map(Participant::getUserId).toList())
+                .participants(participants)
+                .conversationName(groupName)  // Direct chats don't have name
+                .conversationAvatar(null)
+                .createdBy(owner.getUserId())
+                .createdAt(now)
+                .updatedAt(now)
+                .lastMessage(null)
+                .lastMessageAt(now)
+                .isActive(true)
+                .settings(Conversation.ConversationSettings.builder()
+                        .allowReactions(true)
+                        .allowPinning(true)
+                        .adminOnlyPost(false)
+                        .build())
+                .build();
+
+        // Save to database
+        Conversation saved = conversationRepository.save(conversationInstance);
+
+        log.info("Created new direct conversation: {}", saved.getId());
+
+        return saved;
+    }
+
     private Conversation createConversationService(String senderId, String type, Conversation conversation) {
         String receiverId;
         Optional<String> filterSender = conversation.getParticipantIds()

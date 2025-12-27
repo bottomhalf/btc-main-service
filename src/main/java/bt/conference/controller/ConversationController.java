@@ -2,10 +2,13 @@ package bt.conference.controller;
 
 import bt.conference.dto.*;
 import bt.conference.entity.Conversation;
+import bt.conference.model.GroupUser;
 import bt.conference.service.ConversationService;
 import in.bottomhalf.common.models.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping(value = "api/conversations/")
@@ -71,11 +74,23 @@ public class ConversationController {
 
     /**
      * Search conversations by username, email, or conversation name
-     * GET /api/conversations/search?term=john&pageNumber=1&pageSize=10
+     * POST /api/conversations/search?term=john&pageNumber=1&pageSize=10
      */
-    @PostMapping("create-group/{id}")
-    public ApiResponse createGroupChannel(@PathVariable("id") String id, @RequestBody Conversation conversation) {
+    @PostMapping("build-group/{id}")
+    public ApiResponse buildGroupChannel(@PathVariable("id") String id, @RequestBody Conversation conversation) {
         Conversation response = conversationService.createGroupChannelService(id, conversation);
+        return ApiResponse.Ok(response);
+    }
+
+    /**
+     * Search conversations by username, email, or conversation name
+     * POST /api/conversations/search?term=john&pageNumber=1&pageSize=10
+     */
+    @PostMapping("create-group/{userId}/{groupName}")
+    public ApiResponse createGroup(@PathVariable("groupName") String groupName,
+                                   @PathVariable("userId") String userId,
+                                   @RequestBody List<Conversation.Participant> groupUsers) {
+        Conversation response = conversationService.createGroupService(userId, groupName, groupUsers);
         return ApiResponse.Ok(response);
     }
 }
