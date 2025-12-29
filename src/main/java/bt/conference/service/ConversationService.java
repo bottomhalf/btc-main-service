@@ -116,6 +116,54 @@ public class ConversationService {
     /**
      * Search conversations by term (username, email, conversation_name)
      */
+    public PagedResponse<Conversation> searchConversationsRecentGroup(
+            String searchTerm,
+            int pageNumber,
+            int pageSize
+    ) {
+        int skip = (pageNumber - 1) * pageSize;
+
+        Query query = new Query();
+
+        // Add search filter if term provided
+        if (searchTerm != null && !searchTerm.trim().isEmpty()) {
+            String pattern = searchTerm.trim();
+
+            Criteria searchCriteria = Criteria
+                    .where("conversation_type").is("group")
+                    .and("participants.user_id").regex(pattern, "i");
+
+            query.addCriteria(searchCriteria);
+        }
+
+        // Count total matching records
+        long totalRecords = mongoTemplate.count(query, Conversation.class);
+
+        log.info("Search term: '{}', Total records found: {}", searchTerm, totalRecords);
+
+        // Add sorting and pagination
+        query.with(Sort.by(Sort.Direction.DESC, "last_message_at"));
+        query.skip(skip);
+        query.limit(pageSize);
+
+        // Execute query
+        List<Conversation> conversations = mongoTemplate.find(query, Conversation.class);
+
+        log.info("Returning {} conversations", conversations.size());
+
+        int totalPages = (int) Math.ceil((double) totalRecords / pageSize);
+
+        return PagedResponse.of(
+                conversations,
+                totalPages,
+                pageNumber,
+                pageSize
+        );
+    }
+
+    /**
+     * Search conversations by term (username, email, conversation_name)
+     */
     public PagedResponse<Conversation> searchConversations(
             String searchTerm,
             int pageNumber,

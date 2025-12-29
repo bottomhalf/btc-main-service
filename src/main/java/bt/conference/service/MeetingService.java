@@ -1,5 +1,7 @@
 package bt.conference.service;
 
+import bt.conference.dto.PagedResponse;
+import bt.conference.entity.Conversation;
 import bt.conference.entity.MeetingDetail;
 import bt.conference.entity.UserDetail;
 import bt.conference.serviceinterface.IMeetingService;
@@ -23,9 +25,12 @@ public class MeetingService implements IMeetingService {
     DbProcedureManager dbProcedureManager;
     @Autowired
     DbManager dbManager;
+    @Autowired
+    ConversationService conversationService;
+
     private static final String CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     private static final SecureRandom random = new SecureRandom();
-    public List<MeetingDetail> generateMeetingService(MeetingDetail meetingDetail) throws Exception {
+    public PagedResponse<Conversation> generateMeetingService(MeetingDetail meetingDetail) throws Exception {
         if (meetingDetail.getTitle() == null || meetingDetail.getTitle().isEmpty())
             throw new Exception("Invalid meeting title");
 
@@ -37,7 +42,7 @@ public class MeetingService implements IMeetingService {
         meetingDetail.setHasQuickMeeting(false);
         addMeetingDetail(meetingDetail);
 
-        return getAllMeetingByOrganizerService();
+        return getRecentMeetingsService();
     }
 
     private void addMeetingDetail(MeetingDetail meetingDetail) throws Exception {
@@ -53,17 +58,12 @@ public class MeetingService implements IMeetingService {
         dbManager.save(meetingDetail);
     }
 
-    public List<MeetingDetail> getAllMeetingByOrganizerService() throws Exception {
+    public PagedResponse<Conversation> getRecentMeetingsService() throws Exception {
         int userId = Integer.parseInt(userSession.getUserId().replace(userSession.getCode(), ""));
-        return dbProcedureManager.getRecords("sp_get_all_meeting_userid",
-                Arrays.asList(
-                        new DbParameters("_userid", userId, Types.BIGINT)
-                ),
-                MeetingDetail.class
-        );
+        return conversationService.searchConversationsRecentGroup(String.valueOf(userId), 1, 5);
     }
 
-    public List<MeetingDetail> generateQuickMeetingService(MeetingDetail meetingDetail) throws Exception {
+    public PagedResponse<Conversation> generateQuickMeetingService(MeetingDetail meetingDetail) throws Exception {
         meetingDetail.setDurationInSecond(36000);
         java.util.Date utilDate = new java.util.Date();
         var date = new java.sql.Timestamp(utilDate.getTime());
@@ -71,7 +71,7 @@ public class MeetingService implements IMeetingService {
         meetingDetail.setHasQuickMeeting(true);
 
         addMeetingDetail(meetingDetail);
-        return getAllMeetingByOrganizerService();
+        return getRecentMeetingsService();
     }
 
     public  MeetingDetail validateMeetingService(MeetingDetail meetingDetail) throws Exception {

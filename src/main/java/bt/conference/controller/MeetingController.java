@@ -18,9 +18,9 @@ public class MeetingController {
         return ApiResponse.Ok(result);
     }
 
-    @GetMapping("getAllMeetingByOrganizer")
-    public ApiResponse getAllMeetingByOrganizer() throws Exception {
-        var result = _meetingService.getAllMeetingByOrganizerService();
+    @GetMapping("get-recent-meetings")
+    public ApiResponse getRecentMeetings() throws Exception {
+        var result = _meetingService.getRecentMeetingsService();
         return ApiResponse.Ok(result);
     }
 
