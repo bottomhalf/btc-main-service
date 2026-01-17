@@ -86,11 +86,12 @@ public class ConversationController {
      * Search conversations by username, email, or conversation name
      * POST /api/conversations/search?term=john&pageNumber=1&pageSize=10
      */
-    @PostMapping("create-group/{userId}/{groupName}")
+    @PostMapping("create-group/{userId}/{groupName}/{conversationId}")
     public ApiResponse createGroup(@PathVariable("groupName") String groupName,
                                    @PathVariable("userId") String userId,
+                                   @PathVariable("conversationId") String conversationId,
                                    @RequestBody List<Conversation.Participant> groupUsers) {
-        Conversation response = conversationService.createGroupService(userId, groupName, groupUsers);
+        Conversation response = conversationService.createGroupService(userId, groupName, conversationId, groupUsers);
         return ApiResponse.Ok(response);
     }
 }

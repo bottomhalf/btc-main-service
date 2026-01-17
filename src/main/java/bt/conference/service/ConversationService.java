@@ -6,9 +6,11 @@ import bt.conference.entity.Conversation.Participant;
 import bt.conference.entity.UserCache;
 import bt.conference.repository.ConversationRepository;
 import bt.conference.repository.UserCacheRepository;
+import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import com.fierhub.model.UserSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.bson.types.ObjectId;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -17,6 +19,11 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.UUID;
+import java.util.logging.Logger;
 
 import java.time.Instant;
 import java.util.*;
@@ -29,6 +36,8 @@ public class ConversationService {
     private final UserCacheRepository userCacheRepository;
     private final MongoTemplate mongoTemplate;
     private final UserSession userSession;
+
+    private static final Logger logger = Logger.getLogger(ObjectIdGenerators.UUIDGenerator.class.getName());
 
     /**
      * Get ALL conversations with pagination (No filter)
@@ -241,7 +250,7 @@ public class ConversationService {
                 });
     }
 
-    public Conversation createGroupService(String userId, String groupName, List<Participant> participants) {
+    public Conversation createGroupService(String userId, String groupName, String conversationId, List<Participant> participants) {
         if (groupName == null || groupName.isEmpty()) {
             throw new IllegalArgumentException("Group name should not be empty or null");
         }
@@ -249,6 +258,22 @@ public class ConversationService {
         if (userId == null || userId.isEmpty()) {
             throw new IllegalArgumentException("User id should not be empty or null");
         }
+
+
+        Optional<UserCache> userCache = this.userCacheRepository.findByUserId(userSession.getUserId());
+        var currentUser = userCache.stream().findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("User not found with id: " + userSession.getUserId()));
+
+        Instant now = Instant.now();
+        participants.add(Participant.builder()
+                .userId(currentUser.getUserId())
+                .firstName(currentUser.getFirstName())
+                .lastName(currentUser.getLastName())
+                .email(currentUser.getEmail())
+                .avatar(currentUser.getAvatar())
+                .joinedAt(now)
+                .role("User")
+                .build());
 
         validateGroupParticipants(participants);
 
@@ -258,7 +283,6 @@ public class ConversationService {
         owner.setRole("admin");
 
         // Build conversation
-        Instant now = Instant.now();
 
         Conversation conversationInstance = Conversation.builder()
                 .conversationType("group")
@@ -279,12 +303,81 @@ public class ConversationService {
                         .build())
                 .build();
 
+        if (isValidObjectIdHex(conversationId)) {
+            conversationInstance.setId(conversationId);
+        } else {
+            var first = participants.stream().findAny();
+            if (first.isPresent()) {
+                conversationInstance.setId(generateMongoObjectId(userId, first.get().getUserId()));
+            } else {
+                conversationInstance.setId(generateMongoObjectId(userId, "empty"));
+            }
+        }
+
         // Save to database
         Conversation saved = conversationRepository.save(conversationInstance);
 
         log.info("Created new direct conversation: {}", saved.getId());
 
         return saved;
+    }
+
+    public static boolean isValidObjectIdHex(String hex) {
+        if (hex == null || hex.isBlank()) {
+            return false;
+        }
+
+        return hex.matches("^[a-fA-F0-9]{24}$");
+    }
+
+    public String generateUUID(String firstUserId, String secondUserId) {
+        // 1️⃣ Sort both IDs lexicographically (FULL string, not first char)
+        String id1;
+        String id2;
+
+        if (firstUserId.compareTo(secondUserId) <= 0) {
+            id1 = firstUserId;
+            id2 = secondUserId;
+        } else {
+            id1 = secondUserId;
+            id2 = firstUserId;
+        }
+
+        // 2️⃣ Concatenate after sorting
+        String value = id1 + id2;
+
+        // 3️⃣ Fixed namespace (same as Go)
+        UUID namespace = UUID.fromString("6ba7b810-9dad-11d1-80b4-00c04fd430c8");
+
+        // 4️⃣ Deterministic UUID (SHA-1 based)
+        byte[] nameBytes = (namespace.toString() + value)
+                .getBytes(StandardCharsets.UTF_8);
+
+        UUID clientID = UUID.nameUUIDFromBytes(nameBytes);
+
+        logger.info(clientID.toString());
+
+        return clientID.toString();
+    }
+
+    public String generateMongoObjectId(String firstUserId, String secondUserId) {
+        try {
+            // Step 1: Generate deterministic UUID
+            String uuid = generateUUID(firstUserId, secondUserId);
+
+            // Step 2: SHA-1 hash of UUID (same family as UUID v5)
+            MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
+            byte[] hash = sha1.digest(uuid.getBytes(StandardCharsets.UTF_8));
+
+            // Step 3: Take first 12 bytes → MongoDB ObjectId
+            byte[] objectIdBytes = new byte[12];
+            System.arraycopy(hash, 0, objectIdBytes, 0, 12);
+
+            return new ObjectId(objectIdBytes).toHexString();
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to generate MongoDB ObjectId", e);
+        }
     }
 
     private Conversation createConversationService(String senderId, String type, Conversation conversation) {
@@ -345,6 +438,7 @@ public class ConversationService {
         Instant now = Instant.now();
 
         Conversation conversationInstance = Conversation.builder()
+                .id(generateMongoObjectId(sender.getUserId(), receiver.getUserId()))
                 .conversationType(type)
                 .participantIds(participantIds)
                 .participants(participants)
