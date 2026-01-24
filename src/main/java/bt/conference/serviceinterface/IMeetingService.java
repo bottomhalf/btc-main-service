@@ -10,6 +10,6 @@ public interface IMeetingService {
     PagedResponse<Conversation> generateMeetingService(MeetingDetail meetingDetail) throws Exception;
     PagedResponse<Conversation> getRecentMeetingsService() throws Exception;
     PagedResponse<Conversation> generateQuickMeetingService(MeetingDetail meetingDetail) throws Exception;
-    MeetingDetail validateMeetingService(MeetingDetail meetingDetail) throws Exception;
+    Conversation validateMeetingService(String access_token) throws Exception;
     MeetingDetail validateMeetingIdPassCodeService(MeetingDetail meetingDetail) throws Exception;
 }

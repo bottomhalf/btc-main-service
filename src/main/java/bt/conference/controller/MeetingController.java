@@ -30,9 +30,9 @@ public class MeetingController {
         return ApiResponse.Ok(result);
     }
 
-    @PostMapping("validateMeeting")
-    public ApiResponse validateMeeting(@RequestBody MeetingDetail meetingDetail) throws Exception {
-        var result = _meetingService.validateMeetingService(meetingDetail);
+    @GetMapping("validateMeeting")
+    public ApiResponse validateMeeting(@RequestParam(name = "access_token") String access_token) throws Exception {
+        var result = _meetingService.validateMeetingService(access_token);
         return ApiResponse.Ok(result);
     }
 

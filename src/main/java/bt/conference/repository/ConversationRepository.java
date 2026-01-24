@@ -45,4 +45,8 @@ public interface ConversationRepository extends MongoRepository<Conversation, St
     // Find direct conversation between two users
     @Query("{ 'conversation_type': 'direct', 'participant_ids': { $all: [?0, ?1] } }")
     Optional<Conversation> findDirectConversation(String odUserId1, String odUserId2);
+
+    // Find direct conversation between two users
+    @Query("{ 'conversation_id': '?0'}")
+    Optional<Conversation> getMeetingById(String meetingId);
 }
