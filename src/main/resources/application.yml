@@ -26,9 +26,9 @@ spring:
 
   # LiveKit configuration
 livekit:
-  api:
-    key: APIJByNUPVKqDS8
-    secret: mcv0eMRL9uSw3fAna0jkDjxs4ZKBvpAM5WV9k3fOvk4B
+  url: http://livekit-service.cf.svc.cluster.local:7880
+  api-key: APIJByNUPVKqDS8
+  api-secret: mcv0eMRL9uSw3fAna0jkDjxs4ZKBvpAM5WV9k3fOvk4B
 
 fierhub:
   configuration-service:
