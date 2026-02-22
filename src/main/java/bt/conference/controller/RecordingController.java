@@ -18,18 +18,13 @@ public class RecordingController {
     UserSession userSession;
 
     @PostMapping("/start")
-    public ResponseEntity<?> start(
-            @RequestHeader("Authorization") String jwt,
-            @RequestBody Map<String, String> body) {
-
+    public ResponseEntity<?> start(@RequestBody Map<String, String> body) {
         recordingService.startRoomRecording(body.get("roomName"));
         return ResponseEntity.ok("Recording started");
     }
 
     @PostMapping("/stop")
-    public ResponseEntity<?> stop(
-            @RequestBody Map<String, String> body) {
-
+    public ResponseEntity<?> stop(@RequestBody Map<String, String> body) {
         recordingService.stopRoomRecording(body.get("roomName"));
         return ResponseEntity.ok("Recording stopped");
     }
