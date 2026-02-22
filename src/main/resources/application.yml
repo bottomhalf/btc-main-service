@@ -24,7 +24,7 @@ spring:
     database: btc_meets
 
 
-  # LiveKit configuration
+# LiveKit configuration
 livekit:
   url: http://livekit-service.cf.svc.cluster.local:7880
   api-key: APIJByNUPVKqDS8
