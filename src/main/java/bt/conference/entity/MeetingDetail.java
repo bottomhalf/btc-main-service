@@ -42,6 +42,16 @@ public class MeetingDetail {
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     Date startDate;
 
+    @Column(name = "startTime")
+    String startTime;
+
+    @Column(name = "endDate")
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    Date endDate;
+
+    @Column(name = "endTime")
+    String endTime;
+
     @Column(name = "durationInSecond")
     int durationInSecond;
 
@@ -65,4 +75,10 @@ public class MeetingDetail {
 
     @Transient
     List<String> participantsId;
+
+    @Transient
+    int participantCount;
+
+    @Transient
+    List<Conversation.Participant> participantsDetail;
 }

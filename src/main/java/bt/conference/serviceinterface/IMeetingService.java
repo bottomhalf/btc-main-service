@@ -16,4 +16,6 @@ public interface IMeetingService {
     Map<String, Object> getAllMeetingByOrganizerService() throws Exception;
     MeetingDetail validateMeetingByIdService(String meetingId) throws Exception;
     List<MeetingDetail> getAllScheduleMeetingByOrganizerService() throws Exception;
+    MeetingDetail getMeetingDetailService(Long meetingDetailId, String meetingId) throws Exception;
+    MeetingDetail updateMeetingDetailService(MeetingDetail meetingDetail) throws Exception;
 }

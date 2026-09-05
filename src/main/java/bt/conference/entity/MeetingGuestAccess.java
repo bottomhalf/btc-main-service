@@ -1,11 +1,12 @@
-package bt.conference.model;
+package bt.conference.entity;
 
+import bt.conference.model.TokenStatus;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fierhub.database.annotations.Column;
 import com.fierhub.database.annotations.Id;
 import com.fierhub.database.annotations.Table;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -19,14 +20,13 @@ import java.util.Date;
 @Builder
 @JsonIgnoreProperties(ignoreUnknown = true)
 @Table(name = "meeting_guest_access")
-public class GuestMeeting {
+public class MeetingGuestAccess {
 
     @Id
     @Column(name = "id")
     @JsonProperty("id")
     private Long id;
 
-    // ───────── Token Details ─────────
     @Column(name = "access_token")
     @JsonProperty("access_token")
     private String accessToken;
@@ -35,7 +35,6 @@ public class GuestMeeting {
     @JsonProperty("meeting_id")
     private String meetingId;
 
-    // ───────── Usage Rules ─────────
     @Column(name = "max_usage")
     @JsonProperty("max_usage")
     @Builder.Default
@@ -49,26 +48,23 @@ public class GuestMeeting {
     @Column(name = "is_single_use")
     @JsonProperty("is_single_use")
     @Builder.Default
-    private Boolean singleUse = true;
+    private Boolean isSingleUse = true;
 
-    // ───────── Validity Window ─────────
     @Column(name = "valid_from")
     @JsonProperty("valid_from")
-    @JsonFormat(pattern="yyyy-MM-dd'T'HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private Date validFrom;
 
     @Column(name = "valid_until")
     @JsonProperty("valid_until")
-    @JsonFormat(pattern="yyyy-MM-dd'T'HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private Date validUntil;
 
-    // ───────── Status ─────────
     @Column(name = "status")
     @JsonProperty("status")
     @Builder.Default
     private TokenStatus status = TokenStatus.ACTIVE;
 
-    // ───────── Guest Info ─────────
     @Column(name = "guest_name")
     @JsonProperty("guest_name")
     private String guestName;
@@ -77,24 +73,23 @@ public class GuestMeeting {
     @JsonProperty("guest_email")
     private String guestEmail;
 
-    // ───────── Audit ─────────
     @Column(name = "created_by")
     @JsonProperty("created_by")
     private Long createdBy;
 
     @Column(name = "created_at")
     @JsonProperty("created_at")
-    @JsonFormat(pattern="yyyy-MM-dd'T'HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private Date createdAt;
 
     @Column(name = "updated_at")
     @JsonProperty("updated_at")
-    @JsonFormat(pattern="yyyy-MM-dd'T'HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private Date updatedAt;
 
     @Column(name = "used_at")
     @JsonProperty("used_at")
-    @JsonFormat(pattern="yyyy-MM-dd'T'HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private Date usedAt;
 
     @Column(name = "used_ip")

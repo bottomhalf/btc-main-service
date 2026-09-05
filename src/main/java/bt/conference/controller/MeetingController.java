@@ -66,4 +66,49 @@ public class MeetingController {
         var result = _meetingService.getAllScheduleMeetingByOrganizerService();
         return BaseResponse.Ok(result);
     }
+
+    /**
+     * Get meeting detail by meetingDetailId or meetingId
+     * GET /api/meeting/getMeetingDetail?meetingDetailId=1 or ?meetingId=abc
+     */
+    @GetMapping("getMeetingDetail")
+    public BaseResponse getMeetingDetail(
+            @RequestParam(name = "meetingDetailId", required = false) Long meetingDetailId,
+            @RequestParam(name = "meetingId", required = false) String meetingId
+    ) throws Exception {
+        var result = _meetingService.getMeetingDetailService(meetingDetailId, meetingId);
+        return BaseResponse.Ok(result);
+    }
+
+    /**
+     * Get meeting detail by ID in path
+     * GET /api/meeting/getMeetingDetail/{meetingDetailId}
+     */
+    @GetMapping("getMeetingDetail/{meetingDetailId}")
+    public BaseResponse getMeetingDetailById(
+            @PathVariable("meetingDetailId") Long meetingDetailId
+    ) throws Exception {
+        var result = _meetingService.getMeetingDetailService(meetingDetailId, null);
+        return BaseResponse.Ok(result);
+    }
+
+    /**
+     * Edit / update meeting detail
+     * PUT /api/meeting/updateMeetingDetail
+     */
+    @PutMapping("updateMeetingDetail")
+    public BaseResponse updateMeetingDetail(@RequestBody MeetingDetail meetingDetail) throws Exception {
+        var result = _meetingService.updateMeetingDetailService(meetingDetail);
+        return BaseResponse.Ok(result);
+    }
+
+    /**
+     * Edit / update meeting detail (POST alternative)
+     * POST /api/meeting/updateMeetingDetail
+     */
+    @PostMapping("updateMeetingDetail")
+    public BaseResponse updateMeetingDetailPost(@RequestBody MeetingDetail meetingDetail) throws Exception {
+        var result = _meetingService.updateMeetingDetailService(meetingDetail);
+        return BaseResponse.Ok(result);
+    }
 }

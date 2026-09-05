@@ -1,6 +1,8 @@
 package bt.conference.controller;
 
 import bt.conference.dto.PagedResponse;
+import bt.conference.dto.RegisterUserRequest;
+import bt.conference.dto.UpdateUserRequest;
 import bt.conference.entity.Users;
 import bt.conference.model.UsersSearchRequest;
 import bt.conference.service.UsersService;
@@ -14,6 +16,50 @@ import org.springframework.web.bind.annotation.*;
 public class UsersController {
 
     private final UsersService usersService;
+
+    /**
+     * Register a new user (persists to MySQL and MongoDB)
+     * POST /api/users/register
+     */
+    @PostMapping("register")
+    public BaseResponse registerUser(@RequestBody RegisterUserRequest request) throws Exception {
+        Users registeredUser = usersService.registerUser(request);
+        return BaseResponse.Ok(registeredUser);
+    }
+
+    /**
+     * Update an existing user (updates both MySQL and MongoDB)
+     * PUT /api/users/update
+     */
+    @PutMapping("update")
+    public BaseResponse updateUser(@RequestBody UpdateUserRequest request) throws Exception {
+        Users updatedUser = usersService.updateUser(request);
+        return BaseResponse.Ok(updatedUser);
+    }
+
+    /**
+     * Update an existing user by ID (updates both MySQL and MongoDB)
+     * PUT /api/users/update/{id}
+     */
+    @PutMapping("update/{id}")
+    public BaseResponse updateUserById(
+            @PathVariable String id,
+            @RequestBody UpdateUserRequest request
+    ) throws Exception {
+        request.setId(id);
+        Users updatedUser = usersService.updateUser(request);
+        return BaseResponse.Ok(updatedUser);
+    }
+
+    /**
+     * Update an existing user (POST alternative)
+     * POST /api/users/update
+     */
+    @PostMapping("update")
+    public BaseResponse updateUserPost(@RequestBody UpdateUserRequest request) throws Exception {
+        Users updatedUser = usersService.updateUser(request);
+        return BaseResponse.Ok(updatedUser);
+    }
 
     /**
      * Get all users with pagination

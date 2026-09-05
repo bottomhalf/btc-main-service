@@ -22,4 +22,16 @@ public class UserController {
         _userService.registerUserService(request);
         return BaseResponse.Ok("User registered successfully");
     }
+
+    @PutMapping("update")
+    public BaseResponse updateUser(@RequestBody bt.conference.dto.UpdateUserRequest request) throws Exception {
+        _userService.updateUserService(request);
+        return BaseResponse.Ok("User updated successfully");
+    }
+
+    @PostMapping("update")
+    public BaseResponse updateUserPost(@RequestBody bt.conference.dto.UpdateUserRequest request) throws Exception {
+        _userService.updateUserService(request);
+        return BaseResponse.Ok("User updated successfully");
+    }
 }

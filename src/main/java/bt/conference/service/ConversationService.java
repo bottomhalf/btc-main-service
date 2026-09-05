@@ -5,10 +5,14 @@ import bt.conference.entity.Conversation;
 import bt.conference.entity.Conversation.Participant;
 import bt.conference.entity.ConversationMembers;
 import bt.conference.entity.Users;
+import bt.conference.entity.Message;
+import bt.conference.entity.Reaction;
 import bt.conference.model.ApplicationConstant;
 import bt.conference.model.CreateGroupRequest;
 import bt.conference.repository.ConversationMembersRepository;
 import bt.conference.repository.ConversationRepository;
+import bt.conference.repository.MessageRepository;
+import bt.conference.repository.ReactionRepository;
 import bt.conference.repository.UsersRepository;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import com.fierhub.model.UserSession;
@@ -22,6 +26,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -38,9 +43,16 @@ import java.util.*;
 public class ConversationService {
     private final ConversationRepository conversationRepository;
     private final ConversationMembersRepository conversationMembersRepository;
+    private final MessageRepository messageRepository;
+    private final ReactionRepository reactionRepository;
     private final UsersRepository usersRepository;
     private final MongoTemplate mongoTemplate;
     private final UserSession userSession;
+
+    private static final String COLLECTION_CONVERSATIONS = "conversations";
+    private static final String COLLECTION_CONVERSATION_MEMBERS = "conversation_members";
+    private static final String COLLECTION_MESSAGES = "messages";
+    private static final String COLLECTION_REACTIONS = "reactions";
 
     private static final Logger logger = Logger.getLogger(ObjectIdGenerators.UUIDGenerator.class.getName());
 
@@ -723,5 +735,513 @@ public class ConversationService {
         }
 
         return conversation;
+    }
+
+    // =========================================================================
+    // Chat Operations (MongoDB: conversations, conversation_members, messages, reactions)
+    // =========================================================================
+
+    /**
+     * Retrieve chat detail by chat_id, including conversation info,
+     * conversation_members, message stats, and reactions.
+     */
+    public ChatDetailResponse getChatDetailService(String chatId) throws Exception {
+        validateChatId(chatId);
+
+        Conversation conversation = findConversationById(chatId);
+        if (conversation == null) {
+            throw new IllegalArgumentException("Chat not found with id: " + chatId);
+        }
+
+        // Fetch members from conversation_members collection
+        List<ConversationMembers> members = findMembersByChatId(chatId);
+        int memberCount = members != null ? members.size() : conversation.getMemberCount();
+
+        // Fetch message stats and recent messages from messages collection
+        Query msgQuery = buildChatMessagesQuery(chatId);
+        long totalMessages = mongoTemplate.count(msgQuery, Message.class, COLLECTION_MESSAGES);
+
+        Query recentMsgQuery = buildChatMessagesQuery(chatId)
+                .with(Sort.by(Sort.Direction.DESC, "createdAt"))
+                .limit(20);
+        List<Message> recentMessages = mongoTemplate.find(recentMsgQuery, Message.class, COLLECTION_MESSAGES);
+
+        // Fetch reactions from reactions collection
+        List<String> messageIdentifiers = extractMessageIdentifiers(recentMessages);
+        Query reactionQuery = buildChatReactionsQuery(chatId, messageIdentifiers);
+        long totalReactions = mongoTemplate.count(reactionQuery, Reaction.class, COLLECTION_REACTIONS);
+        List<Reaction> reactions = mongoTemplate.find(reactionQuery.limit(50), Reaction.class, COLLECTION_REACTIONS);
+
+        return ChatDetailResponse.builder()
+                .chatId(chatId)
+                .conversation(conversation)
+                .members(members)
+                .memberCount(memberCount)
+                .totalMessages(totalMessages)
+                .totalReactions(totalReactions)
+                .recentMessages(recentMessages)
+                .reactions(reactions)
+                .build();
+    }
+
+    /**
+     * Update chat details in MongoDB conversations and conversation_members collection based on chat_id.
+     */
+    public ChatDetailResponse updateChatDetailService(String chatId, UpdateChatDetailRequest request) throws Exception {
+        String targetChatId = (chatId != null && !chatId.trim().isEmpty()) ? chatId.trim() : request.getChatId();
+        validateChatId(targetChatId);
+
+        Conversation conversation = findConversationById(targetChatId);
+        if (conversation == null) {
+            throw new IllegalArgumentException("Chat not found with id: " + targetChatId);
+        }
+
+        Query convQuery = buildConversationIdQuery(targetChatId);
+        Update convUpdate = new Update();
+        boolean convModified = false;
+
+        if (request.getTitle() != null && !request.getTitle().trim().isEmpty()) {
+            convUpdate.set("title", request.getTitle().trim());
+            conversation.setTitle(request.getTitle().trim());
+            convModified = true;
+        }
+
+        if (request.getDescription() != null) {
+            convUpdate.set("description", request.getDescription().trim());
+            conversation.setDescription(request.getDescription().trim());
+            convModified = true;
+        }
+
+        if (request.getAvatar() != null) {
+            convUpdate.set("avatar", request.getAvatar().trim());
+            conversation.setAvatar(request.getAvatar().trim());
+            convModified = true;
+        }
+
+        if (request.getType() != null && !request.getType().trim().isEmpty()) {
+            convUpdate.set("type", request.getType().trim());
+            conversation.setType(request.getType().trim());
+            convModified = true;
+        }
+
+        if (request.getSettings() != null) {
+            convUpdate.set("settings", request.getSettings());
+            conversation.setSettings(request.getSettings());
+            convModified = true;
+        }
+
+        if (convModified) {
+            convUpdate.set("updatedAt", Instant.now());
+            mongoTemplate.updateFirst(convQuery, convUpdate, Conversation.class, COLLECTION_CONVERSATIONS);
+            log.info("Updated conversation {} in MongoDB conversations collection", targetChatId);
+        }
+
+        // Apply member updates in conversation_members collection if provided
+        if (request.getMemberUpdates() != null && !request.getMemberUpdates().isEmpty()) {
+            Instant now = Instant.now();
+            for (UpdateChatDetailRequest.MemberUpdateDetail mu : request.getMemberUpdates()) {
+                if (mu.getUserId() != null && !mu.getUserId().trim().isEmpty()) {
+                    Query mQuery = new Query(new Criteria().andOperator(
+                            buildMemberConversationCriteria(targetChatId),
+                            Criteria.where("userId").is(mu.getUserId().trim())
+                    ));
+                    Update mUpdate = new Update();
+                    boolean mModified = false;
+
+                    if (mu.getRole() != null) {
+                        mUpdate.set("role", mu.getRole().trim());
+                        mModified = true;
+                    }
+                    if (mu.getNickname() != null) {
+                        mUpdate.set("nickname", mu.getNickname().trim());
+                        mModified = true;
+                    }
+                    if (mu.getIsMuted() != null) {
+                        mUpdate.set("isMuted", mu.getIsMuted());
+                        mModified = true;
+                    }
+                    if (mu.getMuteUntilMillis() != null) {
+                        mUpdate.set("muteUntil", Instant.ofEpochMilli(mu.getMuteUntilMillis()));
+                        mModified = true;
+                    }
+                    if (mu.getIsPinned() != null) {
+                        mUpdate.set("isPinned", mu.getIsPinned());
+                        mModified = true;
+                    }
+                    if (mu.getIsArchived() != null) {
+                        mUpdate.set("isArchived", mu.getIsArchived());
+                        mModified = true;
+                    }
+                    if (mu.getNotification() != null) {
+                        mUpdate.set("notification", mu.getNotification().trim());
+                        mModified = true;
+                    }
+                    if (mu.getStatus() != null) {
+                        mUpdate.set("status", mu.getStatus().trim());
+                        mModified = true;
+                    }
+
+                    if (mModified) {
+                        mUpdate.set("updatedAt", now);
+                        mongoTemplate.updateMulti(mQuery, mUpdate, ConversationMembers.class, COLLECTION_CONVERSATION_MEMBERS);
+                        log.info("Updated member {} for chat {} in MongoDB conversation_members collection", mu.getUserId(), targetChatId);
+                    }
+                }
+            }
+        }
+
+        return getChatDetailService(targetChatId);
+    }
+
+    /**
+     * Delete chat by chat_id across MongoDB collections:
+     * - conversations
+     * - conversation_members
+     * - messages
+     * - reactions
+     *
+     * Supports soft delete (default) and permanent (hard) delete.
+     */
+    public DeleteChatResponse deleteChatService(String chatId, boolean permanent) throws Exception {
+        validateChatId(chatId);
+
+        // Fetch message IDs to ensure cascading reaction updates/removals
+        Query msgFindQuery = buildChatMessagesQuery(chatId);
+        msgFindQuery.fields().include("_id").include("message_id");
+        List<Message> messages = mongoTemplate.find(msgFindQuery, Message.class, COLLECTION_MESSAGES);
+        List<String> messageIdentifiers = extractMessageIdentifiers(messages);
+
+        Query convQuery = buildConversationIdQuery(chatId);
+        Query memberQuery = buildChatMembersQuery(chatId);
+        Query msgQuery = buildChatMessagesQuery(chatId);
+        Query reactionQuery = buildChatReactionsQuery(chatId, messageIdentifiers);
+
+        long convAffected;
+        long membersAffected;
+        long messagesAffected;
+        long reactionsAffected;
+
+        if (permanent) {
+            reactionsAffected = mongoTemplate.remove(reactionQuery, Reaction.class, COLLECTION_REACTIONS).getDeletedCount();
+            messagesAffected = mongoTemplate.remove(msgQuery, Message.class, COLLECTION_MESSAGES).getDeletedCount();
+            membersAffected = mongoTemplate.remove(memberQuery, ConversationMembers.class, COLLECTION_CONVERSATION_MEMBERS).getDeletedCount();
+            convAffected = mongoTemplate.remove(convQuery, Conversation.class, COLLECTION_CONVERSATIONS).getDeletedCount();
+
+            log.info("Permanently deleted chat {}: {} conversations, {} members, {} messages, {} reactions",
+                    chatId, convAffected, membersAffected, messagesAffected, reactionsAffected);
+
+            return DeleteChatResponse.builder()
+                    .chatId(chatId)
+                    .message("Chat permanently deleted from MongoDB collections")
+                    .permanent(true)
+                    .conversationsAffected(convAffected)
+                    .membersAffected(membersAffected)
+                    .messagesAffected(messagesAffected)
+                    .reactionsAffected(reactionsAffected)
+                    .build();
+        } else {
+            Instant now = Instant.now();
+
+            // 1. Update conversations collection: mark isDeleted = true
+            Update convUpdate = new Update()
+                    .set("isDeleted", true)
+                    .set("updatedAt", now);
+            convAffected = mongoTemplate.updateMulti(convQuery, convUpdate, Conversation.class, COLLECTION_CONVERSATIONS).getModifiedCount();
+
+            // 2. Update conversation_members collection: status = DELETED, leftAt = now
+            Update memberUpdate = new Update()
+                    .set("status", "DELETED")
+                    .set("isArchived", true)
+                    .set("removedAt", now)
+                    .set("updatedAt", now);
+            membersAffected = mongoTemplate.updateMulti(memberQuery, memberUpdate, ConversationMembers.class, COLLECTION_CONVERSATION_MEMBERS).getModifiedCount();
+
+            // 3. Update messages collection: status = STATUS_DELETED (5), isDeleted = true
+            Update msgUpdate = new Update()
+                    .set("status", Message.STATUS_DELETED)
+                    .set("isDeleted", true)
+                    .set("editedAt", now);
+            messagesAffected = mongoTemplate.updateMulti(msgQuery, msgUpdate, Message.class, COLLECTION_MESSAGES).getModifiedCount();
+
+            // 4. Update reactions collection: mark isDeleted = true
+            Update reactionUpdate = new Update()
+                    .set("isDeleted", true);
+            reactionsAffected = mongoTemplate.updateMulti(reactionQuery, reactionUpdate, Reaction.class, COLLECTION_REACTIONS).getModifiedCount();
+
+            log.info("Soft-deleted chat {}: {} conversations, {} members, {} messages, {} reactions",
+                    chatId, convAffected, membersAffected, messagesAffected, reactionsAffected);
+
+            return DeleteChatResponse.builder()
+                    .chatId(chatId)
+                    .message("Chat soft-deleted successfully across MongoDB collections")
+                    .permanent(false)
+                    .conversationsAffected(convAffected)
+                    .membersAffected(membersAffected)
+                    .messagesAffected(messagesAffected)
+                    .reactionsAffected(reactionsAffected)
+                    .build();
+        }
+    }
+
+    /**
+     * Clear messages and reactions for a chat without deleting the conversation or members.
+     * Updates MongoDB messages, reactions, conversations, and conversation_members collections.
+     */
+    public ClearChatResponse clearChatService(String chatId, boolean permanent) throws Exception {
+        validateChatId(chatId);
+
+        Query msgFindQuery = buildChatMessagesQuery(chatId);
+        msgFindQuery.fields().include("_id").include("message_id");
+        List<Message> messages = mongoTemplate.find(msgFindQuery, Message.class, COLLECTION_MESSAGES);
+        List<String> messageIdentifiers = extractMessageIdentifiers(messages);
+
+        Query msgQuery = buildChatMessagesQuery(chatId);
+        Query reactionQuery = buildChatReactionsQuery(chatId, messageIdentifiers);
+
+        long messagesAffected;
+        long reactionsAffected;
+
+        if (permanent) {
+            reactionsAffected = mongoTemplate.remove(reactionQuery, Reaction.class, COLLECTION_REACTIONS).getDeletedCount();
+            messagesAffected = mongoTemplate.remove(msgQuery, Message.class, COLLECTION_MESSAGES).getDeletedCount();
+        } else {
+            Instant now = Instant.now();
+            Update msgUpdate = new Update()
+                    .set("status", Message.STATUS_DELETED)
+                    .set("isDeleted", true)
+                    .set("editedAt", now);
+            messagesAffected = mongoTemplate.updateMulti(msgQuery, msgUpdate, Message.class, COLLECTION_MESSAGES).getModifiedCount();
+
+            Update reactionUpdate = new Update().set("isDeleted", true);
+            reactionsAffected = mongoTemplate.updateMulti(reactionQuery, reactionUpdate, Reaction.class, COLLECTION_REACTIONS).getModifiedCount();
+        }
+
+        // Reset last message info in conversations collection
+        Query convQuery = buildConversationIdQuery(chatId);
+        Update convUpdate = new Update()
+                .set("lastMessageId", "")
+                .set("lastMessageAt", Instant.now());
+        mongoTemplate.updateFirst(convQuery, convUpdate, Conversation.class, COLLECTION_CONVERSATIONS);
+
+        // Reset unread counts in conversation_members collection
+        Query memberQuery = buildChatMembersQuery(chatId);
+        Update memberUpdate = new Update()
+                .set("unreadCount", 0)
+                .set("lastReadMessageId", null)
+                .set("updatedAt", Instant.now());
+        long membersUpdated = mongoTemplate.updateMulti(memberQuery, memberUpdate, ConversationMembers.class, COLLECTION_CONVERSATION_MEMBERS).getModifiedCount();
+
+        log.info("Cleared chat {}: {} messages, {} reactions, {} members reset",
+                chatId, messagesAffected, reactionsAffected, membersUpdated);
+
+        return ClearChatResponse.builder()
+                .chatId(chatId)
+                .message("Chat messages and reactions cleared successfully")
+                .permanent(permanent)
+                .messagesAffected(messagesAffected)
+                .reactionsAffected(reactionsAffected)
+                .membersUpdated(membersUpdated)
+                .build();
+    }
+
+    /**
+     * Get members of a chat from MongoDB conversation_members collection.
+     */
+    public List<ConversationMembers> getChatMembersService(String chatId) throws Exception {
+        validateChatId(chatId);
+        return findMembersByChatId(chatId);
+    }
+
+    /**
+     * Update individual member status/settings in MongoDB conversation_members collection.
+     */
+    public ConversationMembers updateMemberStatusService(String chatId, UpdateMemberStatusRequest request) throws Exception {
+        validateChatId(chatId);
+        if (request.getUserId() == null || request.getUserId().trim().isEmpty()) {
+            throw new IllegalArgumentException("userId is required to update member status");
+        }
+
+        Query query = new Query(new Criteria().andOperator(
+                buildMemberConversationCriteria(chatId),
+                Criteria.where("userId").is(request.getUserId().trim())
+        ));
+
+        ConversationMembers member = mongoTemplate.findOne(query, ConversationMembers.class, COLLECTION_CONVERSATION_MEMBERS);
+        if (member == null) {
+            throw new IllegalArgumentException("Member not found in chat " + chatId + " with userId: " + request.getUserId());
+        }
+
+        Update update = new Update();
+        boolean modified = false;
+
+        if (request.getRole() != null && !request.getRole().trim().isEmpty()) {
+            update.set("role", request.getRole().trim());
+            member.setRole(request.getRole().trim());
+            modified = true;
+        }
+        if (request.getNickname() != null) {
+            update.set("nickname", request.getNickname().trim());
+            member.setNickname(request.getNickname().trim());
+            modified = true;
+        }
+        if (request.getIsMuted() != null) {
+            update.set("isMuted", request.getIsMuted());
+            member.setMuted(request.getIsMuted());
+            modified = true;
+        }
+        if (request.getMuteUntil() != null) {
+            update.set("muteUntil", request.getMuteUntil());
+            member.setMuteUntil(request.getMuteUntil());
+            modified = true;
+        }
+        if (request.getIsPinned() != null) {
+            update.set("isPinned", request.getIsPinned());
+            member.setPinned(request.getIsPinned());
+            modified = true;
+        }
+        if (request.getIsArchived() != null) {
+            update.set("isArchived", request.getIsArchived());
+            member.setArchived(request.getIsArchived());
+            modified = true;
+        }
+        if (request.getNotification() != null && !request.getNotification().trim().isEmpty()) {
+            update.set("notification", request.getNotification().trim());
+            member.setNotification(request.getNotification().trim());
+            modified = true;
+        }
+        if (request.getStatus() != null && !request.getStatus().trim().isEmpty()) {
+            update.set("status", request.getStatus().trim());
+            member.setStatus(request.getStatus().trim());
+            modified = true;
+        }
+
+        if (modified) {
+            Instant now = Instant.now();
+            update.set("updatedAt", now);
+            member.setUpdatedAt(now);
+            mongoTemplate.updateFirst(query, update, ConversationMembers.class, COLLECTION_CONVERSATION_MEMBERS);
+            log.info("Updated member {} in chat {}", request.getUserId(), chatId);
+        }
+
+        return member;
+    }
+
+    /**
+     * Get paginated messages for a chat from MongoDB messages collection.
+     */
+    public PagedResponse<Message> getChatMessagesService(String chatId, int pageNumber, int pageSize) throws Exception {
+        validateChatId(chatId);
+
+        int page = Math.max(1, pageNumber);
+        int size = Math.max(1, Math.min(100, pageSize));
+        int skip = (page - 1) * size;
+
+        Query query = buildChatMessagesQuery(chatId);
+        long total = mongoTemplate.count(query, Message.class, COLLECTION_MESSAGES);
+
+        query.with(Sort.by(Sort.Direction.DESC, "createdAt"))
+                .skip(skip)
+                .limit(size);
+
+        List<Message> messages = mongoTemplate.find(query, Message.class, COLLECTION_MESSAGES);
+
+        return PagedResponse.of(messages, total, page, size);
+    }
+
+    // =========================================================================
+    // Chat Helper Methods
+    // =========================================================================
+
+    private void validateChatId(String chatId) {
+        if (chatId == null || chatId.trim().isEmpty()) {
+            throw new IllegalArgumentException("chatId must not be null or empty");
+        }
+    }
+
+    private Conversation findConversationById(String chatId) {
+        // First try standard repository
+        Optional<Conversation> convOpt = conversationRepository.findById(chatId);
+        if (convOpt.isPresent()) {
+            return convOpt.get();
+        }
+
+        // Try MongoTemplate with both string and ObjectId if valid hex
+        Query query = buildConversationIdQuery(chatId);
+        return mongoTemplate.findOne(query, Conversation.class, COLLECTION_CONVERSATIONS);
+    }
+
+    private List<ConversationMembers> findMembersByChatId(String chatId) {
+        Query query = buildChatMembersQuery(chatId);
+        return mongoTemplate.find(query, ConversationMembers.class, COLLECTION_CONVERSATION_MEMBERS);
+    }
+
+    private Query buildConversationIdQuery(String chatId) {
+        if (isValidObjectIdHex(chatId)) {
+            return new Query(new Criteria().orOperator(
+                    Criteria.where("_id").is(chatId),
+                    Criteria.where("_id").is(new ObjectId(chatId))
+            ));
+        }
+        return new Query(Criteria.where("_id").is(chatId));
+    }
+
+    private Query buildChatMembersQuery(String chatId) {
+        return new Query(buildMemberConversationCriteria(chatId));
+    }
+
+    private Criteria buildMemberConversationCriteria(String chatId) {
+        List<Criteria> criteriaList = new ArrayList<>();
+        criteriaList.add(Criteria.where("conversationId").is(chatId));
+        criteriaList.add(Criteria.where("conversation_id").is(chatId));
+        criteriaList.add(Criteria.where("chat_id").is(chatId));
+        if (isValidObjectIdHex(chatId)) {
+            criteriaList.add(Criteria.where("conversationId").is(new ObjectId(chatId)));
+        }
+        return new Criteria().orOperator(criteriaList.toArray(new Criteria[0]));
+    }
+
+    private Query buildChatMessagesQuery(String chatId) {
+        List<Criteria> criteriaList = new ArrayList<>();
+        criteriaList.add(Criteria.where("conversation_id").is(chatId));
+        criteriaList.add(Criteria.where("conversationId").is(chatId));
+        criteriaList.add(Criteria.where("chat_id").is(chatId));
+        if (isValidObjectIdHex(chatId)) {
+            criteriaList.add(Criteria.where("conversation_id").is(new ObjectId(chatId)));
+        }
+        return new Query(new Criteria().orOperator(criteriaList.toArray(new Criteria[0])));
+    }
+
+    private Query buildChatReactionsQuery(String chatId, List<String> messageIdentifiers) {
+        List<Criteria> reactionCriteria = new ArrayList<>();
+        reactionCriteria.add(Criteria.where("chat_id").is(chatId));
+        reactionCriteria.add(Criteria.where("conversation_id").is(chatId));
+        reactionCriteria.add(Criteria.where("conversationId").is(chatId));
+        if (isValidObjectIdHex(chatId)) {
+            reactionCriteria.add(Criteria.where("chat_id").is(new ObjectId(chatId)));
+            reactionCriteria.add(Criteria.where("conversation_id").is(new ObjectId(chatId)));
+        }
+
+        if (messageIdentifiers != null && !messageIdentifiers.isEmpty()) {
+            reactionCriteria.add(Criteria.where("message_id").in(messageIdentifiers));
+            reactionCriteria.add(Criteria.where("messageId").in(messageIdentifiers));
+        }
+
+        return new Query(new Criteria().orOperator(reactionCriteria.toArray(new Criteria[0])));
+    }
+
+    private List<String> extractMessageIdentifiers(List<Message> messages) {
+        if (messages == null || messages.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Set<String> ids = new HashSet<>();
+        for (Message m : messages) {
+            if (m.getId() != null && !m.getId().trim().isEmpty()) {
+                ids.add(m.getId().trim());
+            }
+            if (m.getMessageId() != null && !m.getMessageId().trim().isEmpty()) {
+                ids.add(m.getMessageId().trim());
+            }
+        }
+        return new ArrayList<>(ids);
     }
 }

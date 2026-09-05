@@ -1,6 +1,7 @@
 package bt.conference.service;
 
 import bt.conference.dto.RegisterUserRequest;
+import bt.conference.dto.UpdateUserRequest;
 import bt.conference.entity.Login;
 import bt.conference.entity.LoginDetail;
 import bt.conference.entity.UserDetail;
@@ -23,6 +24,8 @@ public class UserService implements IUserService {
     DbManager dbManager;
     @Autowired
     UsersRepository usersRepository;
+    @Autowired
+    UsersService usersService;
 
     public List<UserDetail> getAllUserService() throws Exception {
         return dbManager.get(UserDetail.class);
@@ -99,5 +102,9 @@ public class UserService implements IUserService {
             sb.append(chars.charAt(rnd.nextInt(chars.length())));
         }
         return sb.toString();
+    }
+
+    public void updateUserService(UpdateUserRequest request) throws Exception {
+        usersService.updateUser(request);
     }
 }
