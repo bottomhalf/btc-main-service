@@ -35,7 +35,7 @@ public class UserController {
         return BaseResponse.Ok("User updated successfully");
     }
 
-    @GetMapping("getAllUser/{userId}")
+    @GetMapping("deleteUser/{userId}")
     public BaseResponse deleteUser(@PathVariable Long userId) throws Exception {
         var result = _userService.deleteUserService(userId);
         return BaseResponse.Ok(result);
