@@ -10,6 +10,7 @@ import bt.conference.repository.UsersRepository;
 import bt.conference.serviceinterface.IUserService;
 import com.fierhub.database.service.DbManager;
 import com.fierhub.database.utils.ProcedureManager;
+import com.fierhub.model.UserSession;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -26,6 +27,8 @@ public class UserService implements IUserService {
     UsersRepository usersRepository;
     @Autowired
     UsersService usersService;
+    @Autowired
+    UserSession userSession;
 
     public List<UserDetail> getAllUserService() throws Exception {
         return dbManager.get(UserDetail.class);
@@ -93,7 +96,25 @@ public class UserService implements IUserService {
 
         usersRepository.save(mongoUser);
     }
-    
+
+    public String deleteUserService(Long userId) throws Exception {
+        if (userId == null || userId <= 0)
+            throw new Exception("User id is required");
+
+        var result = dbManager.queryRaw("select * from login where userId = " + userId, Login.class);
+        if (result == null)
+            throw new Exception("User not found");
+
+        Date utilDate = new Date();
+        var date = new Timestamp(utilDate.getTime());
+        result.setIsActive(false);
+        result.setUpdatedBy(Long.parseLong(userSession.getUserId()));
+        result.setUpdatedOn(date);
+        dbManager.save(result);
+
+        return "User deleted successfully";
+    }
+
     private String generateRandomPassword(int length) {
         String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
         java.security.SecureRandom rnd = new java.security.SecureRandom();

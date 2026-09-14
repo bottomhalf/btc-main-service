@@ -34,4 +34,7 @@ public class LoginDetail {
 
     @Column(name= "code")
     String code;
+
+    @Transient
+    Boolean isActive;
 }
