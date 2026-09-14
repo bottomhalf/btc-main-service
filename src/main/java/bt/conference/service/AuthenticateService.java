@@ -46,6 +46,9 @@ public class AuthenticateService implements IAuthenticateService {
         if (!userDetail.getPassword().equals(loginDetail.getPassword()))
             throw new Exception("User id address or password is not matching");
 
+        if (!userDetail.getIsActive())
+            throw new Exception("User account is not active. Please contact to admin.");
+
         return getApiAuthResponse(userDetail, "web");
     }
 
@@ -59,6 +62,9 @@ public class AuthenticateService implements IAuthenticateService {
         LoginDetail userDetail = getUserByEmailOrMobile(loginDetail.getEmail(), null);
         if (!userDetail.getPassword().equals(loginDetail.getPassword()))
             throw new Exception("User id address or password is not matching");
+
+        if (!userDetail.getIsActive())
+            throw new Exception("User account is not active. Please contact to admin.");
 
         return getApiAuthResponse(userDetail, "mobile");
     }
