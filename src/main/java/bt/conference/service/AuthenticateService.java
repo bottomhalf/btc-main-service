@@ -36,20 +36,24 @@ public class AuthenticateService implements IAuthenticateService {
 
 
     public ApiAuthResponse authenticateUserService(LoginDetail loginDetail) throws Exception {
-        if (loginDetail.getEmail() == null || loginDetail.getEmail().isEmpty())
-            throw new Exception("Please enter email");
+        try {
+            if (loginDetail.getEmail() == null || loginDetail.getEmail().isEmpty())
+                throw new Exception("Please enter email");
 
-        if (loginDetail.getPassword() == null || loginDetail.getPassword().isEmpty())
-            throw new Exception("Please enter password");
+            if (loginDetail.getPassword() == null || loginDetail.getPassword().isEmpty())
+                throw new Exception("Please enter password");
 
-        LoginDetail userDetail = getUserByEmailOrMobile(loginDetail.getEmail(), null);
-        if (!userDetail.getPassword().equals(loginDetail.getPassword()))
-            throw new Exception("User id address or password is not matching");
+            LoginDetail userDetail = getUserByEmailOrMobile(loginDetail.getEmail(), null);
+            if (!userDetail.getPassword().equals(loginDetail.getPassword()))
+                throw new Exception("User id address or password is not matching");
 
-        if (!userDetail.getIsActive())
-            throw new Exception("User account is not active. Please contact to admin.");
+            if (!userDetail.getIsActive())
+                throw new Exception("User account is not active. Please contact to admin.");
 
-        return getApiAuthResponse(userDetail, "web");
+            return getApiAuthResponse(userDetail, "web");
+        } catch (Exception ex) {
+            throw new Exception("Authentication failed: " + ex.getMessage());
+        }
     }
 
     public ApiAuthResponse authenticateMobileUserService(LoginDetail loginDetail) throws Exception {
